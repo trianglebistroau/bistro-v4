@@ -1,9 +1,17 @@
-export type OnboardingData = {
-  name: string;
-  dataLane: string[];
-  challenge: string;
-  character?: string;
-};
+import { z } from "zod";
+
+// Schema version for migrations
+export const SCHEMA_VERSION = 1;
+
+// Zod schemas for validation
+export const OnboardingSchema = z.object({
+  name: z.string().min(1, "Name is required").max(50, "Name too long"),
+  dataLane: z.array(z.string()).min(1, "At least one content lane required"),
+  challenge: z.string().min(1, "Challenge is required").max(500, "Challenge too long"),
+  character: z.enum(["chef", "scholar", "explorer", "creator", "traveler"]).optional(),
+});
+
+export type OnboardingData = z.infer<typeof OnboardingSchema>;
 
 export type TutorialStep = {
   id: number;
@@ -53,29 +61,25 @@ export function getInitialOnboardingData(): OnboardingData {
   }
 
   try {
-    const parsed = JSON.parse(stored) as Partial<OnboardingData>;
-    const parsedDataLane = Array.isArray(parsed.dataLane)
-      ? parsed.dataLane.filter(
-          (item): item is string => typeof item === "string",
-        )
-      : [];
+    const parsed = JSON.parse(stored) as Record<string, unknown>;
 
-    // Backward compatibility with older single-select lane data.
-    const legacyLane = (parsed as { lane?: unknown }).lane;
-    const normalizedDataLane =
-      parsedDataLane.length > 0
-        ? parsedDataLane
-        : typeof legacyLane === "string" && legacyLane.length > 0
-          ? [legacyLane]
-          : [];
+    // Handle schema migrations
+    const storedVersion = parsed.__schemaVersion as number | undefined;
+    if (storedVersion !== SCHEMA_VERSION) {
+      console.log(`Schema version mismatch: stored=${storedVersion}, current=${SCHEMA_VERSION}`);
+      // For now, return defaults on version mismatch
+      // Future: implement migrateSchema(parsed, storedVersion)
+      return { name: "", dataLane: [], challenge: "" };
+    }
 
-    return {
-      name: typeof parsed.name === "string" ? parsed.name : "",
-      dataLane: normalizedDataLane,
-      challenge: typeof parsed.challenge === "string" ? parsed.challenge : "",
-      character:
-        typeof parsed.character === "string" ? parsed.character : undefined,
-    };
+    // Validate with zod
+    const result = OnboardingSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
+
+    console.error("Onboarding data validation failed:", result.error);
+    return { name: "", dataLane: [], challenge: "" };
   } catch (error) {
     console.error("Failed to parse onboarding data from storage", error);
     return { name: "", dataLane: [], challenge: "" };
@@ -87,7 +91,16 @@ export function saveOnboardingData(data: OnboardingData) {
     return;
   }
 
-  localStorage.setItem(ONBOARDING_DATA_KEY, JSON.stringify(data));
+  // Validate data before saving
+  const validated = OnboardingSchema.safeParse(data);
+  if (!validated.success) {
+    console.error("Invalid onboarding data:", validated.error);
+    return;
+  }
+
+  // Include schema version for future migrations
+  const versioned = { ...data, __schemaVersion: SCHEMA_VERSION };
+  localStorage.setItem(ONBOARDING_DATA_KEY, JSON.stringify(versioned));
 }
 
 export function isOnboardingDone(): boolean {
@@ -105,6 +118,16 @@ export function markOnboardingDone(data: OnboardingData) {
 
   localStorage.setItem(ONBOARDING_DONE_KEY, "true");
   saveOnboardingData(data);
+}
+
+// Helper to validate onboarding data
+export function validateOnboardingData(data: unknown): OnboardingData | null {
+  const result = OnboardingSchema.safeParse(data);
+  if (result.success) {
+    return result.data;
+  }
+  console.error("Validation failed:", result.error);
+  return null;
 }
 
 export function resetOnboardingState() {
