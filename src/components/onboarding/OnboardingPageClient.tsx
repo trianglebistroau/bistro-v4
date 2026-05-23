@@ -2,16 +2,25 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
 import { isOnboardingDone } from "@/utils/onboarding";
 
 type GateStatus = "checking" | "ready" | "redirecting";
 
 export default function OnboardingPageClient() {
+  const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
   const [status, setStatus] = useState<GateStatus>("checking");
 
   useEffect(() => {
+    if (!isLoaded) return;
+
+    if (!isSignedIn) {
+      router.replace("/sign-in");
+      return;
+    }
+
     if (isOnboardingDone()) {
       setStatus("redirecting");
       router.replace("/");
@@ -19,7 +28,7 @@ export default function OnboardingPageClient() {
     }
 
     setStatus("ready");
-  }, [router]);
+  }, [router, isLoaded, isSignedIn]);
 
   if (status !== "ready") {
     return (
@@ -29,5 +38,5 @@ export default function OnboardingPageClient() {
     );
   }
 
-  return <OnboardingFlow onComplete={() => router.replace("/login")} />;
+  return <OnboardingFlow onComplete={() => router.replace("/canvas")} />;
 }
