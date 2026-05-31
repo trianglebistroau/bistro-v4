@@ -62,15 +62,15 @@ function MiniMindMap() {
           OOTD
         </span>
         <span className="text-gray-400">→</span>
-        <span className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700">
+        <span className="rounded-lg bg-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 md:text-[20px]">
           Clothing
         </span>
       </div>
       <div className="ml-16 mt-2 flex gap-2">
-        <span className="rounded-lg bg-[#dde6f6] px-2.5 py-1 text-[11px] font-medium text-gray-700">
+        <span className="rounded-lg bg-[#dde6f6] px-2.5 py-1 text-sm font-medium text-gray-700 md:text-[20px]">
           Ons shoes
         </span>
-        <span className="rounded-lg bg-[#dde6f6] px-2.5 py-1 text-[11px] font-medium text-gray-700">
+        <span className="rounded-lg bg-[#dde6f6] px-2.5 py-1 text-sm font-medium text-gray-700 md:text-[20px]">
           Gymshark
         </span>
       </div>
@@ -83,12 +83,12 @@ function ChatMock() {
     <div className="rounded-xl bg-white p-4">
       <div className="flex gap-2">
         <span className="h-6 w-6 shrink-0 rounded-full bg-[#8bb89a]" />
-        <span className="rounded-2xl rounded-tl-sm bg-gray-100 px-3 py-2 text-[11px] text-gray-600">
+        <span className="rounded-2xl rounded-tl-sm bg-gray-100 px-3 py-2 text-xs text-gray-600 md:text-[20px]">
           What's your overarching theme for this story?
         </span>
       </div>
       <div className="mt-2 flex justify-end">
-        <span className="max-w-[80%] rounded-2xl rounded-tr-sm bg-[#dde6f6] px-3 py-2 text-[11px] text-gray-700">
+        <span className="max-w-[80%] rounded-2xl rounded-tr-sm bg-[#dde6f6] px-3 py-2 text-xs text-gray-700 md:text-[20px]">
           Showing my OOTD when hustling to go network with other runners to
           prepare for Nike Half marathon competition…
         </span>
@@ -166,7 +166,7 @@ function MiniCalendar() {
           </div>
         ))}
       </div>
-      <div className="w-24 rounded-lg bg-[#dde6f6] p-2">
+      <div className="w-20 rounded-lg bg-[#dde6f6] p-2">
         <p className="text-[9px] font-bold text-gray-700">Reminder</p>
         <p className="mt-1 text-[8px] leading-tight text-gray-500">
           Today's the day for editing your Blue Mountains content
@@ -205,46 +205,42 @@ function SlideMockups({ index }: { index: number }) {
 
 interface Props {
   active: number;
+  direction: "forward" | "back";
   onToggleCollapse: () => void;
 }
 
-export default function InstructionPanel({ active, onToggleCollapse }: Props) {
+export default function InstructionPanel({ active, direction, onToggleCollapse }: Props) {
   const slide = SLIDES[active];
   const Icon = slide.icon;
+  const animClass = direction === "forward" ? "animate-slide-up" : "animate-slide-down";
 
   return (
     <section className="flex flex-1 flex-col">
-      <header className="mb-5 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          aria-label="Collapse helper"
-          className="grid h-7 w-7 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100"
-        >
-          <ChevronsLeft size={18} />
-        </button>
-        <h2 className="flex-1 text-lg font-bold text-gray-800">Instruction</h2>
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          aria-label="Expand panel"
-          className="grid h-7 w-7 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100"
-        >
-          <Maximize2 size={15} />
-        </button>
+      <header className="mb-4 flex items-center gap-2 md:mb-5">
+        <h2 className="flex-1 text-base font-bold text-gray-800 md:text-lg">Instruction</h2>
+        {/* Step dots — visible only on mobile where sidebar is hidden */}
+        <div className="flex gap-1.5 md:hidden">
+          {SLIDES.map((_, i) => (
+            <span
+              key={`dot-${i}`}
+              className={`h-2 w-2 rounded-full transition-colors ${i === active ? "bg-[var(--color-primary)]" : "bg-gray-300"}`}
+            />
+          ))}
+        </div>
       </header>
 
       <div
-        className="flex flex-col gap-4 rounded-2xl p-6"
+        key={active}
+        className={`flex flex-col gap-3 rounded-2xl p-4 md:gap-4 md:p-6 ${animClass}`}
         style={{ backgroundColor: slide.panelBg }}
       >
         <div className="flex items-center gap-2">
-          <Icon size={20} className="text-gray-800" strokeWidth={2.2} />
-          <h3 className="text-base font-bold text-gray-800">{slide.title}</h3>
+          <Icon size={18} className="shrink-0 text-gray-800 md:size-5" strokeWidth={2.2} />
+          <h3 className="text-lg font-bold text-gray-800 md:text-2xl">{slide.title}</h3>
         </div>
-        <p className="text-xs leading-relaxed text-gray-600">{slide.body1}</p>
+        <p className="text-base leading-relaxed text-gray-600 md:text-xl">{slide.body1}</p>
         <SlideMockups index={active} />
-        <p className="text-xs leading-relaxed text-gray-600">{slide.body2}</p>
+        <p className="text-base leading-relaxed text-gray-600 md:text-xl">{slide.body2}</p>
       </div>
     </section>
   );
