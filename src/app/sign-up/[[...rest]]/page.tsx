@@ -1,6 +1,6 @@
 "use client";
 
-import { SignIn } from "@clerk/nextjs";
+import { SignUp } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -18,7 +18,7 @@ const BackgroundCanvas = dynamic(
   },
 );
 
-export default function SignInPage() {
+export default function SignUpPage() {
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
 
@@ -44,7 +44,7 @@ export default function SignInPage() {
       <Blob color="#93c5fd" className="w-60 h-60 -top-20 -right-20 opacity-40" />
       <div className="relative flex flex-col items-center px-4">
         <MascotAvatar size={72} />
-        <SignIn />
+        <SignUp fallbackRedirectUrl="/onboarding" />
       </div>
     </div>
   );

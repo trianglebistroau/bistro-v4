@@ -14,7 +14,7 @@ export default async function HealthcheckAuthPage() {
 
   return (
     <div className="p-8 font-mono">
-      <pre className="bg-zinc-100 p-4 rounded-lg text-sm whitespace-pre-wrap">
+      <pre className="p-4 rounded-lg text-sm whitespace-pre-wrap">
         {JSON.stringify(data, null, 2)}
       </pre>
     </div>

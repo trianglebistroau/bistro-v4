@@ -62,18 +62,20 @@ export default function Home() {
         <p className="text-[16px] text-[#52596b] mb-8 max-w-sm">
           Your creative companion for content creation
         </p>
-        <Link
-          href="/sign-in"
-          className="rounded-full bg-[#3b7cf4] px-8 py-3.5 text-[16px] font-semibold text-white transition-colors hover:bg-[#2f67dc] shadow-md"
-        >
-          Get Started
-        </Link>
-        <Link
-          href="/sign-in"
-          className="mt-4 text-[14px] text-[#52596b] hover:text-[#1a1a1a] transition-colors"
-        >
-          Already have an account? Sign in
-        </Link>
+        <div className="flex flex-col items-center gap-3">
+          <Link
+            href="/sign-up"
+            className="rounded-full bg-[#3b7cf4] px-8 py-3.5 text-[16px] font-semibold text-white transition-colors hover:bg-[#2f67dc] shadow-md"
+          >
+            Get Started
+          </Link>
+          <Link
+            href="/sign-in"
+            className="text-[14px] text-[#52596b] hover:text-[#1a1a1a] transition-colors"
+          >
+            Already have an account? Sign in
+          </Link>
+        </div>
       </div>
     </div>
   );
