@@ -1,21 +1,29 @@
 "use client";
 
+import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CalendarEvent, PlanTask } from "@/types/plan";
-import { getCalendarEvents, getPlanTasks, savePlanTasks } from "@/utils/plan";
+import {
+  getCalendarEvents,
+  getPlanTasks,
+  getSummariseData,
+  savePlanTasks,
+} from "@/utils/plan";
 import EventDetailCard from "./EventDetailCard";
 import ExecutionCalendar from "./ExecutionCalendar";
-import TaskList from "./TaskList";
+import PlanBoard from "./PlanBoard";
 
 export default function PlanPageClient() {
   const [tasks, setTasks] = useState<PlanTask[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [projectName, setProjectName] = useState("Your Idea");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setTasks(getPlanTasks());
     setEvents(getCalendarEvents());
+    setProjectName(getSummariseData().meta.projectName);
     setMounted(true);
   }, []);
 
@@ -55,17 +63,26 @@ export default function PlanPageClient() {
     >
       {/* Header */}
       <div className="px-8 pt-7 pb-4 shrink-0">
-        <h1 className="text-2xl font-[var(--font-display)] text-gray-800">
-          Plan your idea
-        </h1>
+        <div className="flex gap-3 flex flex-row items-start gap-5">
+          <h1 className="text-2xl font-[var(--font-display)] text-gray-800">
+            Plan your idea
+          </h1>
+
+          <h2 className="mt-3 text-sm text-gray-500">
+            Here&rsquo;s the list of what you need to prepare
+          </h2>
+        </div>
+        
+          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-primary)] px-3.5 py-1.5 text-sm font-semibold text-white">
+            <Sparkles size={14} />
+            {projectName}
+          </span>
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col gap-4 px-8 pb-8 overflow-hidden">
-        {/* Task list card */}
-        <div className="flex-1 min-h-0 rounded-2xl bg-white shadow-sm overflow-hidden flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto p-6">
-            <TaskList tasks={tasks} onUpdate={handleTasksUpdate} />
-          </div>
+        {/* Phase board: Pre / Production / Post columns */}
+        <div className="flex-1 min-h-0">
+          <PlanBoard tasks={tasks} onUpdate={handleTasksUpdate} />
         </div>
 
         {/* Calendar card */}

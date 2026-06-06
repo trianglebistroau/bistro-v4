@@ -1,12 +1,17 @@
 "use client";
 
-import type { PlanTask } from "@/types/plan";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
+import type { PlanTask } from "@/types/plan";
 
 interface Props {
   task: PlanTask;
   onUpdate: (updated: PlanTask) => void;
+  onDelete?: (id: string) => void;
+  // "chip" = tinted pill (legacy list); "card" = white card (phase board).
+  variant?: "chip" | "card";
+  // Accent colour for the card variant's text (matches its column).
+  accentCls?: string;
 }
 
 const COLOR_MAP: Record<PlanTask["colorTag"], string> = {
@@ -21,8 +26,16 @@ function formatDate(iso: string): string {
   return `${day}/${month}/${year}`;
 }
 
-export default function TaskItem({ task, onUpdate }: Props) {
+export default function TaskItem({
+  task,
+  onUpdate,
+  onDelete,
+  variant = "chip",
+  accentCls,
+}: Props) {
   const [showPicker, setShowPicker] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(task.text);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function handleCalendarClick() {
@@ -35,6 +48,89 @@ export default function TaskItem({ task, onUpdate }: Props) {
     setShowPicker(false);
   }
 
+  function startEdit() {
+    setDraft(task.text);
+    setEditing(true);
+  }
+
+  function commitEdit() {
+    const text = draft.trim();
+    if (text && text !== task.text) onUpdate({ ...task, text });
+    setEditing(false);
+  }
+
+  const picker = showPicker && (
+    <div className="absolute right-0 top-9 z-20 bg-white rounded-2xl shadow-lg border border-gray-100 p-3">
+      <p className="text-xs text-gray-400 mb-2">Which day to add?</p>
+      <input
+        ref={inputRef}
+        type="date"
+        defaultValue={task.scheduledDate ?? ""}
+        onChange={handleDateChange}
+        className="text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+      />
+    </div>
+  );
+
+  // ── Board card: white card with the text and a calendar trigger inside ──
+  if (variant === "card") {
+    return (
+      <div className="group relative">
+        <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3.5 py-2.5 shadow-sm">
+          {editing ? (
+            <input
+              // biome-ignore lint/a11y/noAutofocus: focus follows the user's click to edit
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitEdit();
+                if (e.key === "Escape") setEditing(false);
+              }}
+              className={`min-w-0 flex-1 bg-transparent text-[13px] font-medium outline-none ${accentCls ?? "text-gray-700"}`}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={startEdit}
+              title="Click to edit"
+              className={`min-w-0 flex-1 truncate text-left text-[13px] font-medium ${accentCls ?? "text-gray-700"}`}
+            >
+              {task.text}
+            </button>
+          )}
+
+          {task.scheduledDate && (
+            <span className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">
+              {formatDate(task.scheduledDate)}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleCalendarClick}
+            aria-label={task.scheduledDate ? "Change date" : "Add date"}
+            className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100"
+          >
+            <CalendarIcon size={15} />
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(task.id)}
+              aria-label="Delete task"
+              className="shrink-0 rounded-md p-1 text-gray-300 transition-colors hover:bg-rose-50 hover:text-rose-500"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  // ── Chip: original tinted-pill layout ──────────────────────────────────
   return (
     <div className="flex items-center gap-2 py-1.5">
       <div
@@ -69,18 +165,7 @@ export default function TaskItem({ task, onUpdate }: Props) {
           </button>
         )}
 
-        {showPicker && (
-          <div className="absolute right-0 top-9 z-20 bg-white rounded-2xl shadow-lg border border-gray-100 p-3">
-            <p className="text-xs text-gray-400 mb-2">Which day to add?</p>
-            <input
-              ref={inputRef}
-              type="date"
-              defaultValue={task.scheduledDate ?? ""}
-              onChange={handleDateChange}
-              className="text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            />
-          </div>
-        )}
+        {picker}
       </div>
     </div>
   );

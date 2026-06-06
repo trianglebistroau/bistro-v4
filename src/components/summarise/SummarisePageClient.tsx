@@ -4,10 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { SummariseLoadState } from "@/types/summarise";
-import {
-  consumePendingSummary,
-  type SummariseResult,
-} from "@/utils/summarise-service";
+import { resumeSummary, type SummariseResult } from "@/utils/summarise-service";
 import ConceptMetaBar from "./ConceptMetaBar";
 import ShotTable from "./ShotTable";
 import SummariseSkeleton from "./SummariseSkeleton";
@@ -21,10 +18,11 @@ export default function SummarisePageClient() {
 
   useEffect(() => {
     let cancelled = false;
-    const pending = consumePendingSummary();
+    // Resumes across reloads: returns the in-flight request, the stored result,
+    // or a fresh re-fetch from the saved graph snapshot.
+    const pending = resumeSummary();
 
-    // Nothing in flight (e.g. direct visit) — there's no real data to show, so
-    // bounce back to the canvas rather than render defaults.
+    // Never submitted (e.g. direct visit) — nothing to show, bounce back.
     if (!pending) {
       router.replace("/mind-map");
       return;
@@ -114,8 +112,8 @@ export default function SummarisePageClient() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.35 }}
           >
-            {/* Project badge + concept meta */}
-            <div className="px-6 pt-5 pb-3 shrink-0 border-b border-gray-100 flex items-center gap-4">
+            {/* Project badge + concept meta accordion */}
+            <div className="px-6 pt-5 pb-3 shrink-0 border-b border-gray-100 flex flex-col items-start gap-3">
               <motion.span
                 initial={{ opacity: 0, scale: 0.88 }}
                 animate={{ opacity: 1, scale: 1 }}

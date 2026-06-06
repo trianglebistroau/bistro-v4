@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { CreativeScript } from "@/types/creative";
 import { formatScriptDate } from "@/utils/creative";
 
@@ -14,12 +15,16 @@ interface Props {
 }
 
 export default function IdeaCard({ script }: Props) {
+  const router = useRouter();
   const bg = CARD_BG[script.colorTag ?? "blue"] ?? CARD_BG.blue;
 
   return (
     <button
       type="button"
-      className="flex aspect-square w-full flex-col rounded-[22px] p-5 text-left transition-transform hover:-translate-y-1 sm:aspect-auto sm:h-[215px] sm:w-[225px] sm:p-6"
+      onClick={() =>
+        router.push(`/mind-map?script=${encodeURIComponent(script.id)}`)
+      }
+      className="flex aspect-square w-full flex-col rounded-[22px] p-5 text-left transition-transform hover:-translate-y-1 sm:aspect-auto sm:h-53.75 sm:w-full sm:p-6"
       style={{ backgroundColor: bg }}
     >
       <span className="text-2xl">{script.emoji ?? "✨"}</span>

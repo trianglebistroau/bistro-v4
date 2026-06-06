@@ -3,11 +3,13 @@ import type {
   CreativeScript,
   ScriptColor,
 } from "@/types/creative";
+import { storage } from "@/utils/storage";
 
 const KEYS = {
   folders: "bistro_creative_folders",
   scripts: "bistro_creative_scripts",
   guideSeen: "bistro_creative_guide_seen",
+  draft: "bistro_creative_draft_",
 } as const;
 
 const SEED_FOLDERS: CreativeFolder[] = [
@@ -38,25 +40,11 @@ const SEED_SCRIPTS: CreativeScript[] = [
 // Colours cycle through new scripts so the card grid stays varied.
 const COLOR_CYCLE: ScriptColor[] = ["blue", "yellow", "pink"];
 
-function safeGet<T>(key: string, seed: T): T {
-  if (typeof window === "undefined") return seed;
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return seed;
-    return JSON.parse(raw) as T;
-  } catch {
-    return seed;
-  }
-}
-
-function safeSet<T>(key: string, value: T): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // storage quota exceeded — ignore
-  }
-}
+// Routed through the shared storage seam so swapping local→DB happens in one
+// place (see utils/storage.ts).
+const safeGet = <T>(key: string, seed: T): T => storage.read(key, seed);
+const safeSet = <T>(key: string, value: T): void => storage.write(key, value);
+const safeRemove = (key: string): void => storage.remove(key);
 
 export function getFolders(): CreativeFolder[] {
   return safeGet(KEYS.folders, SEED_FOLDERS);
@@ -78,6 +66,22 @@ export interface ScriptDraft {
   purpose: string;
   intro: string;
   outro: string;
+}
+
+// ── Craft-script draft persistence (per folder) ────────────────────────────
+// Keeps the in-progress answers so navigating away and back restores them.
+// Cleared on submit, when the draft becomes a real script.
+
+export function getDraft(folderId: string): ScriptDraft | null {
+  return safeGet<ScriptDraft | null>(`${KEYS.draft}${folderId}`, null);
+}
+
+export function saveDraft(folderId: string, draft: ScriptDraft): void {
+  safeSet(`${KEYS.draft}${folderId}`, draft);
+}
+
+export function clearDraft(folderId: string): void {
+  safeRemove(`${KEYS.draft}${folderId}`);
 }
 
 /**

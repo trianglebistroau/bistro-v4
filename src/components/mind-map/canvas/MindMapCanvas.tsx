@@ -19,12 +19,13 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { Bot, Download, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyColorToNode,
   getNodeThemeColor,
 } from "@/components/mind-map/utils/nodeColors";
+import { loadCanvas, saveCanvas } from "@/utils/mind-map-store";
 import {
   exportMindMapForAI,
   exportMindMapGraph,
@@ -91,12 +92,40 @@ function CanvasInner() {
     getEdges,
     addNodes,
     getViewport,
+    setViewport,
     getIntersectingNodes,
   } = useReactFlow();
   const router = useRouter();
+  const params = useSearchParams();
+  // Each idea (script) keeps its own canvas; "default" when opened standalone.
+  const mapId = params.get("script") ?? "default";
 
+  // Render the defaults on both server and client (no storage read during
+  // render — that would diverge from the SSR HTML and trip hydration).
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
+
+  // Restore the saved canvas after mount; persistence is gated on this so we
+  // never write the defaults over saved data before it loads.
+  const restored = useRef(false);
+  useEffect(() => {
+    const saved = loadCanvas(mapId);
+    if (saved) {
+      setNodes(saved.nodes);
+      setEdges(saved.edges);
+      if (saved.viewport) setViewport(saved.viewport);
+    }
+    restored.current = true;
+  }, [mapId, setNodes, setEdges, setViewport]);
+
+  // Persist canvas changes, debounced so rapid drags don't thrash storage.
+  useEffect(() => {
+    if (!restored.current) return;
+    const t = setTimeout(() => {
+      saveCanvas(mapId, { nodes, edges, viewport: getViewport() });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [mapId, nodes, edges, getViewport]);
 
   // Id of the node a dragged node is currently hovering over (drop target).
   const dropTargetRef = useRef<string | null>(null);
@@ -116,6 +145,12 @@ function CanvasInner() {
     },
     onEnd: () => {
       minimapTimer.current = setTimeout(() => setShowMinimap(false), 1500);
+      // Viewport-only changes don't trip the node/edge effect — save here too.
+      saveCanvas(mapId, {
+        nodes: getNodes(),
+        edges: getEdges(),
+        viewport: getViewport(),
+      });
     },
   });
 
@@ -301,22 +336,7 @@ function CanvasInner() {
       onPointerLeave={eraserHandlers.onPointerLeave}
     >
       <div className="absolute top-3 right-3 z-10 flex gap-2 pointer-events-auto">
-        <button
-          type="button"
-          title="Export JSON"
-          onClick={() => exportMindMapJSON(nodes, edges, getViewport())}
-          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-        >
-          <Download size={14} /> Export
-        </button>
-        <button
-          type="button"
-          title="Export for AI analysis"
-          onClick={() => exportMindMapForAI(nodes, edges)}
-          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-        >
-          <Bot size={14} /> AI Export
-        </button>
+        
         <button
           type="button"
           title="Finalise idea and generate summary"
@@ -404,6 +424,11 @@ function ActiveToolBadge() {
 }
 
 function CanvasRoot() {
+  const params = useSearchParams();
+  // Remount the whole flow when the active idea changes so each map loads its
+  // own persisted seed (refs/state reset on a fresh mount).
+  const mapId = params.get("script") ?? "default";
+
   return (
     <div className="w-full h-full flex flex-col bg-white overflow-hidden">
       <header className="shrink-0 h-11 border-b border-gray-100 flex items-center px-4 gap-3">
@@ -414,7 +439,7 @@ function CanvasRoot() {
       </header>
 
       <div className="relative flex-1 overflow-hidden">
-        <ReactFlowProvider>
+        <ReactFlowProvider key={mapId}>
           <ResizableSplit
             left={<MindMapSidePanel />}
             right={

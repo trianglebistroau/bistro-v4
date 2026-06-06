@@ -3,7 +3,7 @@
 import { useReactFlow } from "@xyflow/react";
 import { GripVertical, Plus } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   leafNodeStyle,
   MIND_MAP_GROUPS,
@@ -12,6 +12,7 @@ import {
 } from "@/components/mind-map/constants/topics";
 import { EDGE_MARKER } from "@/components/mind-map/edges/edgeTypes";
 import { getScripts } from "@/utils/creative";
+import { loadCustomItems, saveCustomItems } from "@/utils/mind-map-store";
 
 function truncate(text: string, max = 48): string {
   const t = text.trim();
@@ -22,6 +23,7 @@ export default function MindMapSidePanel() {
   const { addNodes, addEdges, getNode, getNodes } = useReactFlow();
   const params = useSearchParams();
   const scriptId = params.get("script");
+  const mapId = scriptId ?? "default";
 
   // Big Picture topics come from the active script's compose answers.
   const bigPictureSections = useMemo<TopicSection[]>(() => {
@@ -51,8 +53,24 @@ export default function MindMapSidePanel() {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [addValue, setAddValue] = useState("");
   // User-added topics, kept in the panel as selectable chips (per section).
-  // They only land on the mind map when their chip is pressed.
+  // They only land on the mind map when their chip is pressed. Persisted per
+  // map so the shortlist survives leaving and returning to the canvas.
+  // Init empty (matches SSR), then hydrate from storage after mount.
   const [customItems, setCustomItems] = useState<Record<string, string[]>>({});
+  const restored = useRef(false);
+
+  useEffect(() => {
+    setCustomItems(loadCustomItems(mapId));
+    restored.current = true;
+  }, [mapId]);
+
+  // Persist the shortlist, debounced — gated until the saved value has loaded
+  // so the initial empty state never overwrites it.
+  useEffect(() => {
+    if (!restored.current) return;
+    const t = setTimeout(() => saveCustomItems(mapId, customItems), 300);
+    return () => clearTimeout(t);
+  }, [mapId, customItems]);
 
   function spawnTopic(group: MindMapGroup, label: string) {
     const text = label.trim();

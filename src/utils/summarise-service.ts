@@ -1,5 +1,6 @@
 import type { ConceptMeta, ShotData } from "@/types/summarise";
 import type { MindMapGraph } from "@/utils/mindmap-export";
+import { storage } from "@/utils/storage";
 
 // Result the summarise page renders.
 export interface SummariseResult {
@@ -15,28 +16,27 @@ interface SummaryApiResponse {
   storyboard: string;
 }
 
+type SummariseStatus = "pending" | "done" | "error";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 const SUMMARY_ENDPOINT = `${API_BASE}/api/v1/summary`;
 const REQUEST_TIMEOUT_MS = 30000;
-const STATUS_KEY = "bistro_summarise_status";
 
-// In-memory handoff between the mind-map page (submit) and the summarise page
-// (consume). Survives client-side navigation; lost on a hard refresh.
+// Persisted so a page reload can resume the job (graph snapshot + status, plus
+// the result once it lands). Routed through the storage seam — swappable to a
+// DB later without touching call sites.
+const STATUS_KEY = "bistro_summarise_status";
+const GRAPH_KEY = "bistro_summarise_graph";
+const RESULT_KEY = "bistro_summarise_result";
+
+// In-memory handle for the request in flight *this* session. After a reload it
+// is gone, and we rebuild it from the persisted graph instead.
 let pending: Promise<SummariseResult> | null = null;
 
-function setStatus(value: "pending" | "done" | "error") {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STATUS_KEY, value);
-  } catch {
-    // ignore quota errors
-  }
-}
-
-// Turn the backend storyboard paragraph into shot rows. The summary endpoint
-// returns a single storyboard string (no per-shot fields), so each scene line
-// becomes one shot. Camera/style columns are left blank — these come from a
-// richer endpoint later, not from defaults.
+// ── storyboard → shot rows ─────────────────────────────────────────────────
+// The summary endpoint returns a single storyboard string (no per-shot
+// fields), so each scene line becomes one shot. Camera/style columns are left
+// blank — they come from a richer endpoint later, not from defaults.
 function storyboardToShots(storyboard: string): ShotData[] {
   const scenes = storyboard
     .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9])/)
@@ -54,7 +54,6 @@ function storyboardToShots(storyboard: string): ShotData[] {
   }));
 }
 
-// Map the backend response onto the page's data model.
 function mapResponse(res: SummaryApiResponse): SummariseResult {
   return {
     meta: {
@@ -83,28 +82,64 @@ async function fetchSummary(graph: MindMapGraph): Promise<SummariseResult> {
       throw new Error(`summary failed (${res.status}): ${detail}`);
     }
     const json = (await res.json()) as SummaryApiResponse;
-    setStatus("done");
     return mapResponse(json);
-  } catch (err) {
-    // Surface the failure — no seed fallback. The page shows an error state.
-    setStatus("error");
-    throw err instanceof Error ? err : new Error("summary request failed");
   } finally {
     clearTimeout(timer);
   }
 }
 
-// Called from the mind-map "Finalise" action.
-export function submitMindMap(graph: MindMapGraph): void {
-  setStatus("pending");
-  pending = fetchSummary(graph);
+// Run the request and persist status + result as it resolves, so a reload can
+// pick up the outcome.
+function run(graph: MindMapGraph): Promise<SummariseResult> {
+  return fetchSummary(graph)
+    .then((result) => {
+      storage.write<SummariseResult>(RESULT_KEY, result);
+      storage.write<SummariseStatus>(STATUS_KEY, "done");
+      return result;
+    })
+    .catch((err: unknown) => {
+      storage.write<SummariseStatus>(STATUS_KEY, "error");
+      throw err instanceof Error ? err : new Error("summary request failed");
+    });
 }
 
-// Called from the summarise page. Returns the in-flight (or last) request, or
-// null when the user navigated directly without ever submitting. NOT cleared
-// here — clearing on read breaks under React Strict Mode's double-invoked
-// effects (the second pass would see null and bounce away). The next
-// submitMindMap() overwrites it instead.
-export function consumePendingSummary(): Promise<SummariseResult> | null {
+// Called from the mind-map "Finalise" action. Snapshots the graph and kicks
+// off the request.
+export function submitMindMap(graph: MindMapGraph): void {
+  storage.write<MindMapGraph>(GRAPH_KEY, graph);
+  storage.write<SummariseStatus>(STATUS_KEY, "pending");
+  storage.remove(RESULT_KEY);
+  pending = run(graph);
+}
+
+// Called from the summarise page. Returns a promise for the result, surviving
+// reloads:
+//   • request in flight this session → return it
+//   • finished in a prior session    → resolve the stored result
+//   • pending/error after a reload   → re-issue from the saved graph snapshot
+//   • never submitted                → null (page bounces back to the canvas)
+export function resumeSummary(): Promise<SummariseResult> | null {
+  if (pending) return pending;
+
+  const status = storage.read<SummariseStatus | null>(STATUS_KEY, null);
+  if (!status) return null;
+
+  if (status === "done") {
+    const saved = storage.read<SummariseResult | null>(RESULT_KEY, null);
+    if (saved) return Promise.resolve(saved);
+  }
+
+  // pending (interrupted by reload) or error → retry from the snapshot.
+  const graph = storage.read<MindMapGraph | null>(GRAPH_KEY, null);
+  if (!graph) return null;
+  pending = run(graph);
   return pending;
+}
+
+// Clear a finished/failed job (e.g. when the user starts a fresh idea).
+export function clearSummary(): void {
+  pending = null;
+  storage.remove(STATUS_KEY);
+  storage.remove(GRAPH_KEY);
+  storage.remove(RESULT_KEY);
 }

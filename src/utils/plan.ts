@@ -117,31 +117,52 @@ const SEED_SHOTS: ShotData[] = [
 const SEED_TASKS: PlanTask[] = [
   {
     id: "1",
-    text: "Go to Blue Mountains",
-    scheduledDate: undefined,
+    text: "Buy digi cam",
     completed: false,
     colorTag: "pink",
+    phase: "pre",
   },
   {
     id: "2",
-    text: "Bring your digi cam and camping equipment",
-    scheduledDate: undefined,
+    text: "Bring camping equipment",
     completed: false,
-    colorTag: "blue",
+    colorTag: "pink",
+    phase: "pre",
   },
   {
     id: "3",
     text: "Film stargazing sequences",
-    scheduledDate: undefined,
     completed: false,
     colorTag: "blue",
+    phase: "production",
   },
   {
     id: "4",
-    text: "Edit your film and colour grade",
-    scheduledDate: undefined,
+    text: "Edit colour grade",
     completed: false,
     colorTag: "yellow",
+    phase: "post",
+  },
+  {
+    id: "5",
+    text: "Cut sequences",
+    completed: false,
+    colorTag: "yellow",
+    phase: "post",
+  },
+  {
+    id: "6",
+    text: "Add sound effects",
+    completed: false,
+    colorTag: "yellow",
+    phase: "post",
+  },
+  {
+    id: "7",
+    text: "Change music tone",
+    completed: false,
+    colorTag: "yellow",
+    phase: "post",
   },
 ];
 
@@ -179,7 +200,12 @@ function safeSet<T>(key: string, value: T): void {
 }
 
 export function getPlanTasks(): PlanTask[] {
-  return safeGet(KEYS.tasks, SEED_TASKS);
+  // Normalize tasks saved before `phase` existed so old data still slots into
+  // a column instead of vanishing.
+  return safeGet(KEYS.tasks, SEED_TASKS).map((t) => ({
+    ...t,
+    phase: t.phase ?? "pre",
+  }));
 }
 
 export function savePlanTasks(tasks: PlanTask[]): void {

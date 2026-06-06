@@ -1,8 +1,14 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { addScript, type ScriptDraft } from "@/utils/creative";
+import { useEffect, useRef, useState } from "react";
+import {
+  addScript,
+  clearDraft,
+  getDraft,
+  type ScriptDraft,
+  saveDraft,
+} from "@/utils/creative";
 import CraftScriptPanel from "./CraftScriptPanel";
 import CreativeHelperSidebar from "./CreativeHelperSidebar";
 
@@ -13,10 +19,27 @@ export default function CreativeComposeClient() {
   const params = useSearchParams();
   const folder = params.get("folder") ?? "f-default";
 
-  // Draft lives in component state ONLY — never persisted. Leaving the page
-  // (back, sidebar, refresh) discards it; only submit writes to storage.
-  const [draft, setDraft] = useState<ScriptDraft>(EMPTY_DRAFT);
+  // Draft is persisted (per folder) so leaving the page and coming back keeps
+  // the answers. Seeded once from storage on mount; cleared on submit when it
+  // becomes a real script.
+  const [draft, setDraft] = useState<ScriptDraft>(() => EMPTY_DRAFT);
   const [collapsed, setCollapsed] = useState(false);
+  const restored = useRef(false);
+
+  // Restore saved draft once on mount (storage is client-only).
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const saved = getDraft(folder);
+    if (saved) setDraft(saved);
+  }, [folder]);
+
+  // Persist edits, debounced so we don't write on every keystroke.
+  useEffect(() => {
+    if (!restored.current) return;
+    const t = setTimeout(() => saveDraft(folder, draft), 400);
+    return () => clearTimeout(t);
+  }, [folder, draft]);
 
   const canSubmit = Object.values(draft).some((v) => v.trim().length > 0);
 
@@ -27,8 +50,10 @@ export default function CreativeComposeClient() {
   function handleSubmit() {
     if (!canSubmit) return;
     const script = addScript(folder, draft);
-    // replace() removes the compose page from history — carries text forward.
-    router.replace(`/mind-map?script=${encodeURIComponent(script.id)}`);
+    // Draft is now committed to a script — drop the working copy.
+    clearDraft(folder);
+    // push() keeps the compose page in history so the canvas can navigate back.
+    router.push(`/mind-map?script=${encodeURIComponent(script.id)}`);
   }
 
   return (
