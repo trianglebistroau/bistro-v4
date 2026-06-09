@@ -1,6 +1,7 @@
 # Minimalist Mind Map — Product Specification
 
-**Stack:** Next.js · `@xyflow/react` · `perfect-freehand` · Tailwind CSS  
+**Stack:** Next.js · `@xyflow/react` · Tailwind CSS  
+<!-- Note: the freehand-draw feature (F-07) was removed; `perfect-freehand` is no longer used in code. -->  
 **Date:** 2026-05-01  
 **Status:** In Progress (Day 7 complete)
 
@@ -227,7 +228,12 @@ User sketched a freehand bubble that's in the wrong place — switches to eraser
 
 ---
 
-### F-07 — Freehand Draw
+### F-07 — Freehand Draw  *(REMOVED — not in current code)*
+
+> This feature was cut. `useDraw.ts` and `DrawingNode.tsx` were deleted and the
+> `perfect-freehand` dependency is no longer used. The spec below is kept for
+> historical reference only. The `B` / video-drop node replaced the pen slot in
+> the toolbar.
 
 **Priority:** P0  
 **Est. Time:** 1.5 days  
@@ -513,8 +519,8 @@ src/components/mind-map/
   nodes/
     StickyNode.tsx              ← Sticky note: contentEditable body, color, resize (F-03) ✅
     TextBoxNode.tsx             ← Transparent text label: formatting, auto-delete if empty (F-04) ✅
-    DrawingNode.tsx             ← Freehand stroke rendered as SVG path (F-07, planned)
-    nodeTypes.ts                ← { sticky, textbox } map passed to <ReactFlow> ✅
+    VideoDropNode.tsx           ← Video analysis node: TikTok URL + prompt → /api/v1/video-mindmap → spawns leaves into the 4 hubs
+    nodeTypes.ts                ← node-type map passed to <ReactFlow> ✅
 
   edges/
     LabeledEdge.tsx             ← Smoothstep edge with inline-editable label via EdgeLabelRenderer (F-05, planned)

@@ -13,29 +13,10 @@ const KEYS = {
 } as const;
 
 const SEED_FOLDERS: CreativeFolder[] = [
-  { id: "f-default", name: "My Scripts", scriptIds: ["s-1", "s-2"] },
+  { id: "f-default", name: "My Scripts", scriptIds: [] },
 ];
 
-const SEED_SCRIPTS: CreativeScript[] = [
-  {
-    id: "s-1",
-    title: "Manly Beach Girl",
-    body: "A warm, sun-soaked day-in-the-life vlog around Manly Beach.",
-    folderId: "f-default",
-    createdAt: "2026-04-22T00:00:00.000Z",
-    emoji: "🏖️",
-    colorTag: "yellow",
-  },
-  {
-    id: "s-2",
-    title: "Strong Body Sesh",
-    body: "High-energy gym session edit with punchy cuts and captions.",
-    folderId: "f-default",
-    createdAt: "2026-04-18T00:00:00.000Z",
-    emoji: "💪",
-    colorTag: "pink",
-  },
-];
+const SEED_SCRIPTS: CreativeScript[] = [];
 
 // Colours cycle through new scripts so the card grid stays varied.
 const COLOR_CYCLE: ScriptColor[] = ["blue", "yellow", "pink"];

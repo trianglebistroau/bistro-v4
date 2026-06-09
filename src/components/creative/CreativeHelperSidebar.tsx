@@ -53,7 +53,7 @@ export default function CreativeHelperSidebar({
         <button
           type="button"
           onClick={rewatch}
-          aria-label="Rewatch guide"
+          aria-label="Watch guide "
           className="mt-auto grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
         >
           <RotateCcw size={15} />
@@ -82,8 +82,6 @@ export default function CreativeHelperSidebar({
         <CreativePillList active={activeIndex} onSelect={onSelect} />
       </div>
 
-
-
       {showReminder && <CreativeFlowReminder />}
 
       <button
@@ -92,7 +90,7 @@ export default function CreativeHelperSidebar({
         className="mt-auto flex items-center justify-center gap-2 rounded-full border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
       >
         <RotateCcw size={15} />
-        Rewatch guide
+        Watch guide
       </button>
     </aside>
   );

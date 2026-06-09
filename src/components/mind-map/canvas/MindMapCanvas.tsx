@@ -18,7 +18,7 @@ import {
   useOnViewportChange,
   useReactFlow,
 } from "@xyflow/react";
-import { Bot, Download, Sparkles } from "lucide-react";
+import { Save, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -26,11 +26,7 @@ import {
   getNodeThemeColor,
 } from "@/components/mind-map/utils/nodeColors";
 import { loadCanvas, saveCanvas } from "@/utils/mind-map-store";
-import {
-  exportMindMapForAI,
-  exportMindMapGraph,
-  exportMindMapJSON,
-} from "@/utils/mindmap-export";
+import { exportMindMapGraph } from "@/utils/mindmap-export";
 import { submitMindMap } from "@/utils/summarise-service";
 import "@xyflow/react/dist/style.css";
 
@@ -264,6 +260,14 @@ function CanvasInner() {
     [getNodes, getEdges, setEdges, setNodes],
   );
 
+  // ── Manual save ────────────────────────────────────────────────────────────
+  const [savedFlash, setSavedFlash] = useState(false);
+  const handleSave = useCallback(() => {
+    saveCanvas(mapId, { nodes, edges, viewport: getViewport() });
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1500);
+  }, [mapId, nodes, edges, getViewport]);
+
   // ── Finalise — export graph, submit to backend, go to summarise ────────────
   const handleFinalise = useCallback(() => {
     submitMindMap(exportMindMapGraph(nodes, edges));
@@ -336,24 +340,17 @@ function CanvasInner() {
       onPointerLeave={eraserHandlers.onPointerLeave}
     >
       <div className="absolute top-3 right-3 z-10 flex gap-2 pointer-events-auto">
-
-        {/* <button
-          type="button"
-          title="Export JSON"
-          onClick={() => exportMindMapJSON(nodes, edges, getViewport())}
-          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-        >
-          <Download size={14} /> Export
-        </button>
+        {/* <button type="button" title="Export JSON" onClick={() => exportMindMapJSON(nodes, edges, getViewport())} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"><Download size={14} /> Export</button> */}
+        {/* <button type="button" title="Export for AI analysis" onClick={() => exportMindMapForAI(nodes, edges)} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"><Bot size={14} /> AI Export</button> */}
         <button
           type="button"
-          title="Export for AI analysis"
-          onClick={() => exportMindMapForAI(nodes, edges)}
+          title="Save canvas"
+          onClick={handleSave}
           className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
         >
-          <Bot size={14} /> AI Export
+          <Save size={14} />
+          {savedFlash ? "Saved!" : "Save"}
         </button>
-         */}
         <button
           type="button"
           title="Finalise idea and generate summary"

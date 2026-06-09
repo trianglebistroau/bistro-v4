@@ -35,7 +35,6 @@ src/components/mind-map/
   hooks/
     useKeyboardShortcuts.ts        — Trie-based hotkey engine (module-level singletons, ref-counted listeners)
     useEraser.ts                   — eraser logic: drag-erase, cursor style injection, node handlers
-    useDraw.ts                     — freehand draw: window pointer listeners, commitRef trick, screen→flow conversion
   constants/initialData.ts         — INITIAL_NODES / INITIAL_EDGES (demo data, edges use "labeled" type)
   canvas/
     MindMapCanvas.tsx              — composition root: ReactFlowProvider, layout shell, ToolProvider wrapper
@@ -45,7 +44,7 @@ src/components/mind-map/
     StickyNode.tsx                 — sticky note node (NodeResizer, two-layer structure, contentEditable)
     TextBoxNode.tsx                — transparent text node (NodeResizeControl lines, auto-delete when empty)
     ShapeNode.tsx                  — shape node: 5 SVG shapes (rect/circle/ellipse/hexagon/cloud), contentEditable text
-    DrawingNode.tsx                — freehand stroke node: perfect-freehand → SVG path, exports getSvgPathFromStroke
+    VideoDropNode.tsx              — video analysis node: TikTok URL + prompt → analyzeVideoMindmap (utils/video-mindmap-service), spawns results into the 4 hubs
     nodeTypes.ts                   — nodeTypes map passed to <ReactFlow>
   edges/
     LabeledEdge.tsx                — custom edge: smoothstep/straight/bezier, inline label edit, floating toolbar
@@ -68,11 +67,11 @@ Example — `useEraser` returns `{ isEraserActive, eraserPos, handlers }` where 
 
 ### ToolContext
 
-`Tool = "select" | "sticky" | "textbox" | "shape" | "connector" | "eraser" | "draw"`. `ToolProvider` wraps the whole app via `MindMapCanvas`. Canvas behaviour (draggable, connectable, panOnDrag, cursor) is driven by `activeTool`. `pendingShape: ShapeType` tracks the selected shape for the shape sub-picker panel.
+`Tool = "select" | "sticky" | "textbox" | "shape" | "connector" | "eraser" | "video"`. `ToolProvider` wraps the whole app via `MindMapCanvas`. Canvas behaviour (draggable, connectable, panOnDrag, cursor) is driven by `activeTool`. `pendingShape: ShapeType` tracks the selected shape for the shape sub-picker panel.
 
 ### Keyboard shortcuts (useKeyboardShortcuts)
 
-Module-level Trie with ref-counted `window` listeners — safe for multiple hook instances. Shortcuts are registered per scope (`"global"` only so far). Key normalisation handles cross-platform aliases. The `isTyping` guard skips shortcuts when focus is inside an `input`, `textarea`, or `contentEditable`. Shortcuts: `V` select · `S` sticky · `T` textbox · `N` shape · `C` connector · `E` eraser · `P` draw · `Delete/Backspace` delete selected · `Ctrl/Cmd+A` select all.
+Module-level Trie with ref-counted `window` listeners — safe for multiple hook instances. Shortcuts are registered per scope (`"global"` only so far). Key normalisation handles cross-platform aliases. The `isTyping` guard skips shortcuts when focus is inside an `input`, `textarea`, or `contentEditable`. Shortcuts: `V` select · `S` sticky · `T` textbox · `N` shape · `C` connector · `E` eraser · `B` video · `Delete/Backspace` delete selected · `Ctrl/Cmd+A` select all.
 
 ### Node structure (two-layer pattern)
 
@@ -106,10 +105,6 @@ All edges use `type: "labeled"` which maps to `LabeledEdge`. Edge data shape: `{
 
 **Connection guards:** `isValidConnection` in `MindMapCanvas` rejects self-loops (source === target) and duplicate edges (same source+target pair already exists).
 
-### Freehand draw (useDraw + DrawingNode)
+### VideoDropNode (video tool)
 
-`useDraw` hook owns all draw state. Uses `window.addEventListener("pointermove"/"pointerup")` instead of React synthetic events (ReactFlow consumes events on the pane before they bubble). The `commitRef` trick stores the commit function in a ref that's reassigned every render — so window listeners (closed over the ref at effect time) always call the latest version with fresh `screenToFlowPosition`.
-
-`onPointerDown` guard: `(e.target as Element).closest(".react-flow__node, .react-flow__edge")` — prevents drawing when pointer-down originates inside an existing node or edge.
-
-Live preview: while drawing, points are in screen coords — a `position: fixed` SVG overlay uses them directly. On commit, each point is converted to flow coords via `screenToFlowPosition`, bounding box computed, and a `drawing` node created at `{ x: minX - pad, y: minY - pad }` with relative points inside.
+The `video` tool places a `videoDrop` node. The node takes a TikTok share link (top input) and a free-text prompt (larger textarea below), then calls `analyzeVideoMindmap` (`utils/video-mindmap-service.ts` → `POST /api/v1/video-mindmap`). On success it spawns the returned suggestions as leaf nodes wired into the four hubs (big picture / tone / audience / composition). States: `idle` / `analyzing` / `done` / `error`. The service applies a 150s timeout and one automatic retry; on permanent failure the button becomes **Retry** so the user can re-run ("rebounce"). Form inputs and status live in `node.data`, so the canvas autosave (`saveCanvas`) persists them across reloads.

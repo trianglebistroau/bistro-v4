@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { CreativeScript } from "@/types/creative";
-import { getFolders, getScripts, isGuideSeen } from "@/utils/creative";
+import { getFolders, getScripts } from "@/utils/creative";
 import CreateIdeaCard from "./CreateIdeaCard";
 import IdeaCard from "./IdeaCard";
 
@@ -20,10 +20,7 @@ export default function CreativeSpacesClient() {
   function handleStartNewPage() {
     const folderId = getFolders()[0]?.id ?? "f-default";
     const query = `?folder=${encodeURIComponent(folderId)}`;
-    // First-timers see the guide; afterwards jump straight to compose.
-    router.push(
-      isGuideSeen() ? `/creative/new${query}` : `/creative/guide${query}`,
-    );
+    router.push(`/creative/new${query}`);
   }
 
   return (
