@@ -47,6 +47,26 @@ const RESULT_KEY = "bistro_summarise_result";
 // is gone, and we rebuild it from the persisted graph instead.
 let pending: Promise<SummariseResult> | null = null;
 
+// ── Status accessor + change subscription ───────────────────────────────────
+// The creative-flow sidebar gates the Summarise/Plan tabs on this status. Same-
+// tab storage writes don't fire `storage` events, so notify subscribers here.
+const statusListeners = new Set<() => void>();
+
+function setStatus(status: SummariseStatus | null): void {
+  if (status === null) storage.remove(STATUS_KEY);
+  else storage.write<SummariseStatus>(STATUS_KEY, status);
+  for (const cb of statusListeners) cb();
+}
+
+export function getSummaryStatus(): SummariseStatus | null {
+  return storage.read<SummariseStatus | null>(STATUS_KEY, null);
+}
+
+export function subscribeSummaryStatus(cb: () => void): () => void {
+  statusListeners.add(cb);
+  return () => statusListeners.delete(cb);
+}
+
 // ── storyboard → shot rows ─────────────────────────────────────────────────
 // The endpoint now returns structured shots. Map each onto a ShotData row;
 // `script` is a single string backend-side, so wrap it for the table's
@@ -144,11 +164,11 @@ function run(graph: MindMapGraph): Promise<SummariseResult> {
   return fetchSummary(graph)
     .then((result) => {
       storage.write<SummariseResult>(RESULT_KEY, result);
-      storage.write<SummariseStatus>(STATUS_KEY, "done");
+      setStatus("done");
       return result;
     })
     .catch((err: unknown) => {
-      storage.write<SummariseStatus>(STATUS_KEY, "error");
+      setStatus("error");
       throw err instanceof Error ? err : new Error("summary request failed");
     });
 }
@@ -157,8 +177,8 @@ function run(graph: MindMapGraph): Promise<SummariseResult> {
 // off the request.
 export function submitMindMap(graph: MindMapGraph): void {
   storage.write<MindMapGraph>(GRAPH_KEY, graph);
-  storage.write<SummariseStatus>(STATUS_KEY, "pending");
   storage.remove(RESULT_KEY);
+  setStatus("pending");
   pending = run(graph);
 }
 
@@ -189,7 +209,7 @@ export function resumeSummary(): Promise<SummariseResult> | null {
 // Clear a finished/failed job (e.g. when the user starts a fresh idea).
 export function clearSummary(): void {
   pending = null;
-  storage.remove(STATUS_KEY);
   storage.remove(GRAPH_KEY);
   storage.remove(RESULT_KEY);
+  setStatus(null);
 }

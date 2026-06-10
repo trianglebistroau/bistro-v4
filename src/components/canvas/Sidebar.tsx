@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 const TOP_NAV = [
   { Icon: Home, label: "Home", href: "/creative" },
   { Icon: Lightbulb, label: "Ideas", href: "/creative" },
-  { Icon: CalendarDays, label: "Calendar", href: "/plan" },
+  { Icon: CalendarDays, label: "Calendar", href: "/calendar" },
 ] as const;
 
 // { Icon: MessageCircle, label: "Chat", href: null },

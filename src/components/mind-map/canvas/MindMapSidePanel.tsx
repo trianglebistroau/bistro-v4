@@ -12,6 +12,7 @@ import {
 } from "@/components/mind-map/constants/topics";
 import { EDGE_MARKER } from "@/components/mind-map/edges/edgeTypes";
 import { getScripts } from "@/utils/creative";
+import { pickHandles } from "@/utils/mind-map-handles";
 import { loadCustomItems, saveCustomItems } from "@/utils/mind-map-store";
 
 function truncate(text: string, max = 48): string {
@@ -94,11 +95,19 @@ export default function MindMapSidePanel() {
       data: { label: truncate(text) },
       style: leafNodeStyle(group.leafBg, group.leafText),
     });
-    // Every spawned topic node is wired to its hub.
+    // Every spawned topic node is wired to its hub, attaching to the handles
+    // that face each other (chosen once, here at creation).
+    const { sourceHandle, targetHandle } = pickHandles(hub, {
+      position,
+      width: 210,
+      height: 40,
+    });
     addEdges({
       id: `e-${id}`,
       source: group.hubId,
       target: id,
+      sourceHandle,
+      targetHandle,
       type: "labeled",
       data: { arrowEnd: true },
       markerEnd: EDGE_MARKER,
@@ -118,7 +127,9 @@ export default function MindMapSidePanel() {
   }
 
   return (
-    <aside className="flex h-full flex-col gap-6 overflow-y-auto bg-[var(--color-surface)] p-5 pt-12 font-[var(--font-poppins)]">
+    // Chrome (scroll, padding, heading bar) is owned by CreativeHelperSidebar;
+    // this renders just the shortlist content nested in its tab content area.
+    <div className="flex flex-col gap-6">
       <h2 className="text-base font-bold text-gray-800">Your idea</h2>
 
       {MIND_MAP_GROUPS.map((group) => {
@@ -206,6 +217,6 @@ export default function MindMapSidePanel() {
           </div>
         );
       })}
-    </aside>
+    </div>
   );
 }

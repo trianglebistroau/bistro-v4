@@ -38,7 +38,7 @@ export default function Home() {
       return;
     }
 
-    router.replace("/canvas");
+    router.replace("/creative");
   }, [router, isSignedIn, isLoaded, user, isUserLoaded]);
 
   if (!ready) {

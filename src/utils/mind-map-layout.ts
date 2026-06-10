@@ -73,3 +73,69 @@ export function findFreePosition(
   }
   return { x: baseX, y: baseY };
 }
+
+// Minimal node-ish shape the hub passes in (position + measured size).
+export interface HubBox {
+  position: { x: number; y: number };
+  width?: number | null;
+  height?: number | null;
+  measured?: { width?: number; height?: number };
+}
+
+/**
+ * Lay out `count` leaf positions in an evenly spaced column beside a hub.
+ *
+ * Clean-spacing rules (ui-ux: spacing-scale / whitespace-balance): one column on
+ * the hub's `dir` side, a fixed gap between leaves, the whole stack vertically
+ * centred on the hub. Each slot is collision-checked via findFreePosition and
+ * pushed into `occupied`, so successive calls (one per category) never overlap.
+ */
+export function distributeBesideHub(
+  hub: HubBox,
+  count: number,
+  occupied: Rect[],
+  opts: {
+    dir?: -1 | 1;
+    leafW?: number;
+    leafH?: number;
+    gap?: number;
+    offsetX?: number;
+  } = {},
+): { x: number; y: number }[] {
+  if (count <= 0) return [];
+
+  const dir = opts.dir ?? 1;
+  const leafW = opts.leafW ?? DEFAULT_W;
+  const leafH = opts.leafH ?? DEFAULT_H;
+  const gap = opts.gap ?? 16;
+  const offsetX = opts.offsetX ?? 240;
+
+  const hubW = hub.width ?? hub.measured?.width ?? 150;
+  const hubH = hub.height ?? hub.measured?.height ?? 44;
+  const hubCenterY = hub.position.y + hubH / 2;
+
+  // Column x on the hub's side, clear of the hub box.
+  const x =
+    dir > 0
+      ? hub.position.x + hubW + offsetX
+      : hub.position.x - offsetX - leafW;
+
+  const step = leafH + gap;
+  const totalH = count * leafH + (count - 1) * gap;
+  const startY = hubCenterY - totalH / 2;
+
+  const positions: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const pos = findFreePosition(
+      occupied,
+      x,
+      startY + i * step,
+      dir,
+      leafW,
+      leafH,
+    );
+    positions.push(pos);
+    occupied.push({ x: pos.x, y: pos.y, w: leafW, h: leafH });
+  }
+  return positions;
+}

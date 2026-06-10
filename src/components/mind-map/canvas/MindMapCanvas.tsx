@@ -25,11 +25,13 @@ import {
   applyColorToNode,
   getNodeThemeColor,
 } from "@/components/mind-map/utils/nodeColors";
+import { pickHandles } from "@/utils/mind-map-handles";
 import { loadCanvas, saveCanvas } from "@/utils/mind-map-store";
 import { exportMindMapGraph } from "@/utils/mindmap-export";
 import { submitMindMap } from "@/utils/summarise-service";
 import "@xyflow/react/dist/style.css";
 
+import CreativeHelperSidebar from "@/components/creative/CreativeHelperSidebar";
 import { EraserCursor } from "@/components/mind-map/canvas/EraserCursor";
 import MindMapSidePanel from "@/components/mind-map/canvas/MindMapSidePanel";
 import ResizableSplit from "@/components/mind-map/canvas/ResizableSplit";
@@ -173,10 +175,17 @@ function CanvasInner() {
   const onConnect: OnConnect = useCallback(
     (connection) => {
       if (activeTool !== "connector") return;
+      // Re-pick the facing handles from node positions so the edge attaches at
+      // the correct angle regardless of which handles the drag used.
+      const ns = getNodes();
+      const s = ns.find((n) => n.id === connection.source);
+      const t = ns.find((n) => n.id === connection.target);
+      const handles = s && t ? pickHandles(s, t) : {};
       setEdges((eds) =>
         addEdge(
           {
             ...connection,
+            ...handles,
             type: "labeled",
             data: { arrowEnd: true },
             markerEnd: EDGE_MARKER,
@@ -185,7 +194,7 @@ function CanvasInner() {
         ),
       );
     },
-    [activeTool, setEdges],
+    [activeTool, setEdges, getNodes],
   );
 
   // ── Hover-to-connect — drag a node onto another to auto-link them ──────────
@@ -227,12 +236,15 @@ function CanvasInner() {
           (e.source === node.id && e.target === target.id),
       );
       if (!alreadyLinked) {
+        const { sourceHandle, targetHandle } = pickHandles(target, node);
         setEdges((eds) =>
           addEdge(
             {
               id: `e-${target.id}-${node.id}`,
               source: target.id,
               target: node.id,
+              sourceHandle,
+              targetHandle,
               type: "labeled",
               data: { arrowEnd: true },
               markerEnd: EDGE_MARKER,
@@ -271,8 +283,12 @@ function CanvasInner() {
   // ── Finalise — export graph, submit to backend, go to summarise ────────────
   const handleFinalise = useCallback(() => {
     submitMindMap(exportMindMapGraph(nodes, edges));
-    router.push("/summarise");
-  }, [nodes, edges, router]);
+    // Keep the active idea in the URL so the summarise/plan stages stay in this
+    // script's context rather than the default map.
+    const query =
+      mapId !== "default" ? `?script=${encodeURIComponent(mapId)}` : "";
+    router.push(`/summarise${query}`);
+  }, [nodes, edges, router, mapId]);
 
   // ── Pane click — place sticky or textbox ──────────────────────────────────
   const onPaneClick = useCallback(
@@ -455,7 +471,11 @@ function CanvasRoot() {
       <div className="relative flex-1 overflow-hidden">
         <ReactFlowProvider key={mapId}>
           <ResizableSplit
-            left={<MindMapSidePanel />}
+            left={
+              <CreativeHelperSidebar embedded showReminder={false}>
+                <MindMapSidePanel />
+              </CreativeHelperSidebar>
+            }
             right={
               <>
                 <CanvasInner />

@@ -1,11 +1,15 @@
-import type { CalendarEvent, PlanTask } from "@/types/plan";
+import type { PlanTask } from "@/types/plan";
 import type { ConceptMeta, ShotData } from "@/types/summarise";
 
 const KEYS = {
-  tasks: "bistro_plan_tasks",
-  events: "bistro_plan_events",
   summarise: "bistro_summarise_data",
 } as const;
+
+// Plan tasks are scoped per folder (idea/script), like calendar events, so a
+// folder's board + scheduled tasks feed that folder on the global calendar.
+const TASKS_PREFIX = "bistro_plan_tasks_";
+const LEGACY_TASKS_KEY = "bistro_plan_tasks"; // pre-per-script global key
+const tasksKey = (scriptId: string) => `${TASKS_PREFIX}${scriptId}`;
 
 const SEED_META: ConceptMeta = {
   concept:
@@ -166,19 +170,6 @@ const SEED_TASKS: PlanTask[] = [
   },
 ];
 
-const SEED_EVENTS: CalendarEvent[] = [
-  {
-    id: "1",
-    date: new Date().toISOString().split("T")[0],
-    title: "Editing",
-    notes: [
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit,",
-      "sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-      "Ut enim ad minim veniam, quis nostrud exercitation.",
-    ],
-  },
-];
-
 function safeGet<T>(key: string, seed: T): T {
   if (typeof window === "undefined") return seed;
   try {
@@ -199,25 +190,19 @@ function safeSet<T>(key: string, value: T): void {
   }
 }
 
-export function getPlanTasks(): PlanTask[] {
-  // Normalize tasks saved before `phase` existed so old data still slots into
-  // a column instead of vanishing.
-  return safeGet(KEYS.tasks, SEED_TASKS).map((t) => ({
-    ...t,
-    phase: t.phase ?? "pre",
-  }));
+export function getPlanTasks(scriptId: string): PlanTask[] {
+  let raw = safeGet<PlanTask[] | null>(tasksKey(scriptId), null);
+  // One-time migration: surface pre-per-script global tasks on the default plan.
+  if (raw === null && scriptId === "default") {
+    raw = safeGet<PlanTask[] | null>(LEGACY_TASKS_KEY, null);
+  }
+  // Normalize tasks saved before `phase` existed so old data still slots into a
+  // column instead of vanishing.
+  return (raw ?? SEED_TASKS).map((t) => ({ ...t, phase: t.phase ?? "pre" }));
 }
 
-export function savePlanTasks(tasks: PlanTask[]): void {
-  safeSet(KEYS.tasks, tasks);
-}
-
-export function getCalendarEvents(): CalendarEvent[] {
-  return safeGet(KEYS.events, SEED_EVENTS);
-}
-
-export function saveCalendarEvents(events: CalendarEvent[]): void {
-  safeSet(KEYS.events, events);
+export function savePlanTasks(scriptId: string, tasks: PlanTask[]): void {
+  safeSet(tasksKey(scriptId), tasks);
 }
 
 export function getSummariseData(): { meta: ConceptMeta; shots: ShotData[] } {

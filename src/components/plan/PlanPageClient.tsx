@@ -1,19 +1,21 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { CalendarEvent, PlanTask } from "@/types/plan";
-import {
-  getCalendarEvents,
-  getPlanTasks,
-  getSummariseData,
-  savePlanTasks,
-} from "@/utils/plan";
+import { loadEvents } from "@/utils/calendar";
+import { getPlanTasks, getSummariseData, savePlanTasks } from "@/utils/plan";
 import EventDetailCard from "./EventDetailCard";
 import ExecutionCalendar from "./ExecutionCalendar";
 import PlanBoard from "./PlanBoard";
 
 export default function PlanPageClient() {
+  const params = useSearchParams();
+  // The plan page is scoped to one folder (idea). Its calendar reads that
+  // script's events from the shared per-script store (also feeds /calendar).
+  const scriptId = params.get("script") ?? "default";
+
   const [tasks, setTasks] = useState<PlanTask[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [projectName, setProjectName] = useState("Your Idea");
@@ -21,15 +23,15 @@ export default function PlanPageClient() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setTasks(getPlanTasks());
-    setEvents(getCalendarEvents());
+    setTasks(getPlanTasks(scriptId));
+    setEvents(loadEvents(scriptId));
     setProjectName(getSummariseData().meta.projectName);
     setMounted(true);
-  }, []);
+  }, [scriptId]);
 
   function handleTasksUpdate(updated: PlanTask[]) {
     setTasks(updated);
-    savePlanTasks(updated);
+    savePlanTasks(scriptId, updated);
   }
 
   function handleDateSelect(date: string) {
@@ -39,6 +41,12 @@ export default function PlanPageClient() {
   const selectedEvent = selectedDate
     ? (events.find((e) => e.date === selectedDate) ?? null)
     : null;
+
+  // Tasks scheduled on the selected day — surfaced in the detail card so the
+  // dot on the calendar actually shows what's due.
+  const selectedTasks = selectedDate
+    ? tasks.filter((t) => t.scheduledDate === selectedDate)
+    : [];
 
   // Derive calendar markers from both stored events and task scheduled dates
   const markedDates = [
@@ -72,11 +80,11 @@ export default function PlanPageClient() {
             Here&rsquo;s the list of what you need to prepare
           </h2>
         </div>
-        
-          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-primary)] px-3.5 py-1.5 text-sm font-semibold text-white">
-            <Sparkles size={14} />
-            {projectName}
-          </span>
+
+        <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-primary)] px-3.5 py-1.5 text-sm font-semibold text-white">
+          <Sparkles size={14} />
+          {projectName}
+        </span>
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col gap-4 px-8 pb-8 overflow-hidden">
@@ -98,7 +106,11 @@ export default function PlanPageClient() {
                 onSelectDate={handleDateSelect}
               />
             </div>
-            <EventDetailCard event={selectedEvent} date={selectedDate} />
+            <EventDetailCard
+              event={selectedEvent}
+              tasks={selectedTasks}
+              date={selectedDate}
+            />
           </div>
         </div>
       </div>

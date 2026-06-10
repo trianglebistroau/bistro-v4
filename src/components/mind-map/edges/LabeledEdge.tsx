@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
 import {
-  EdgeProps,
-  EdgeLabelRenderer,
   BaseEdge,
+  type Edge,
+  EdgeLabelRenderer,
+  type EdgeProps,
+  getBezierPath,
   getSmoothStepPath,
   getStraightPath,
-  getBezierPath,
-  useReactFlow,
   MarkerType,
-  Edge,
-  Position,
+  type Position,
+  useReactFlow,
 } from "@xyflow/react";
 import { ArrowLeft, ArrowRight, Trash2, Type } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +84,8 @@ export default function LabeledEdge({
   const arrowStart = data?.arrowStart ?? false;
   const arrowEnd = data?.arrowEnd ?? true;
 
+  // Coordinates come from the connected handles (chosen once at creation via
+  // pickHandles) — ReactFlow feeds sourceX/Y/Position + targetX/Y/Position.
   const [edgePath, labelX, labelY] = getEdgePath(edgeType, {
     sourceX,
     sourceY,
@@ -252,6 +254,7 @@ export default function LabeledEdge({
               className="text-gray-600 text-xs bg-white border border-gray-300 rounded-lg px-2 py-0.5 shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 min-w-[60px]"
             />
           ) : label ? (
+            // biome-ignore lint/a11y/noStaticElementInteractions: edge label double-click to edit
             <span
               onDoubleClick={(e) => {
                 e.stopPropagation();

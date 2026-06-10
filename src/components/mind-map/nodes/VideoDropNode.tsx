@@ -21,7 +21,12 @@ import {
   MIND_MAP_GROUPS,
 } from "@/components/mind-map/constants/topics";
 import { EDGE_MARKER } from "@/components/mind-map/edges/edgeTypes";
-import { findFreePosition, type Rect, rectOf } from "@/utils/mind-map-layout";
+import { pickHandles } from "@/utils/mind-map-handles";
+import {
+  distributeBesideHub,
+  type Rect,
+  rectOf,
+} from "@/utils/mind-map-layout";
 import {
   analyzeVideoMindmap,
   isTikTokUrl,
@@ -47,8 +52,14 @@ export type VideoDropNodeType = Node<VideoDropData, "videoDrop">;
 const HANDLE_CLS =
   "!w-2.5 !h-2.5 !rounded-full !border-2 !border-white !bg-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150";
 
-// Which response list feeds which hub.
-const HUB_RESULTS: { hubId: string; key: keyof VideoMindmapResult }[] = [
+// The string[] result fields (excludes nodeId) — each feeds one hub.
+type ResultListKey =
+  | "bigPicture"
+  | "toneAndMood"
+  | "targetAudience"
+  | "composition";
+
+const HUB_RESULTS: { hubId: string; key: ResultListKey }[] = [
   { hubId: "hub-bigpicture", key: "bigPicture" },
   { hubId: "hub-tone", key: "toneAndMood" },
   { hubId: "hub-audience", key: "targetAudience" },
@@ -74,23 +85,32 @@ export default function VideoDropNode({
   const [url, setUrl] = useState(data.tiktokUrl ?? "");
   const [prompt, setPrompt] = useState(data.userPrompt ?? "");
 
-  // Drop each analysis result into its hub as a leaf node wired to that hub.
-  // Placement is collision-aware (findFreePosition scans real node rects so we
-  // never stack on top of existing leaves or other hubs), and we skip any label
-  // already present under a hub so re-runs / cache hits don't duplicate.
+  // Spawn each analysis result as a leaf with TWO edges: one back to this video
+  // block (provenance) and one to its category hub. Leaves are grouped per hub
+  // and laid out in an evenly spaced, collision-free column beside that hub
+  // (distributeBesideHub), so both edges read cleanly. De-duped against leaves
+  // already on this block so re-runs / cache hits don't pile up.
   const spawnResults = useCallback(
     (result: VideoMindmapResult): number => {
-      // Live occupancy map — seeded from every current node, then grown as we
-      // place each new leaf so siblings in this batch avoid each other too.
+      const self = getNode(id);
+      if (!self) return 0;
+
+      const leafW = 210;
+      const leafH = 40;
+      const leafBox = (pos: { x: number; y: number }) => ({
+        position: pos,
+        width: leafW,
+        height: leafH,
+      });
+
+      // Live occupancy map — seeded from every current node, grown as we place.
       const occupied: Rect[] = getNodes().map(rectOf);
-      // Existing leaf labels per hub, for dedupe.
-      const existing = new Map<string, Set<string>>();
+      // Labels already attached to this block, for dedupe.
+      const seen = new Set<string>();
       for (const n of getNodes()) {
-        const m = /^topic-(hub-[a-z]+)-/.exec(n.id);
-        if (!m) continue;
-        const label = (n.data as { label?: string }).label ?? "";
-        if (!existing.has(m[1])) existing.set(m[1], new Set());
-        existing.get(m[1])?.add(label);
+        if (n.id.startsWith(`vid-${id}-`)) {
+          seen.add((n.data as { label?: string }).label ?? "");
+        }
       }
 
       let spawned = 0;
@@ -99,16 +119,22 @@ export default function VideoDropNode({
         const hub = getNode(hubId);
         if (!group || !hub) continue;
 
-        const seen = existing.get(hubId) ?? new Set<string>();
-        const baseX = hub.position.x + group.leafDir * 250;
-        const baseY = hub.position.y - 40;
+        // New labels for this category (after dedupe).
+        const labels = result[key]
+          .map((raw) => truncate(raw))
+          .filter((label) => label && !seen.has(label));
+        if (labels.length === 0) continue;
 
-        for (const raw of result[key]) {
-          const label = truncate(raw);
-          if (!label || seen.has(label)) continue;
+        // Even, collision-free column beside this hub.
+        const positions = distributeBesideHub(hub, labels.length, occupied, {
+          dir: group.leafDir,
+          leafW,
+          leafH,
+        });
 
-          const pos = findFreePosition(occupied, baseX, baseY, group.leafDir);
-          const nodeId = `topic-${hubId}-${Date.now()}-${spawned}`;
+        labels.forEach((label, i) => {
+          const pos = positions[i];
+          const nodeId = `vid-${id}-${Date.now()}-${spawned}`;
           addNodes({
             id: nodeId,
             type: "default",
@@ -116,22 +142,40 @@ export default function VideoDropNode({
             data: { label },
             style: leafNodeStyle(group.leafBg, group.leafText),
           });
+
+          // Edge 1: video block → leaf (provenance).
+          const vid = pickHandles(self, leafBox(pos));
           addEdges({
-            id: `e-${nodeId}`,
-            source: hubId,
+            id: `e-vid-${nodeId}`,
+            source: id,
             target: nodeId,
+            sourceHandle: vid.sourceHandle,
+            targetHandle: vid.targetHandle,
             type: "labeled",
             data: { arrowEnd: true },
             markerEnd: EDGE_MARKER,
           });
-          occupied.push({ x: pos.x, y: pos.y, w: 210, h: 40 });
+
+          // Edge 2: category hub → leaf (matches the panel's spawnTopic).
+          const hubH = pickHandles(hub, leafBox(pos));
+          addEdges({
+            id: `e-hub-${nodeId}`,
+            source: hubId,
+            target: nodeId,
+            sourceHandle: hubH.sourceHandle,
+            targetHandle: hubH.targetHandle,
+            type: "labeled",
+            data: { arrowEnd: true },
+            markerEnd: EDGE_MARKER,
+          });
+
           seen.add(label);
           spawned += 1;
-        }
+        });
       }
       return spawned;
     },
-    [getNode, getNodes, addNodes, addEdges],
+    [id, getNode, getNodes, addNodes, addEdges],
   );
 
   const handleAnalyze = useCallback(async () => {
@@ -165,7 +209,7 @@ export default function VideoDropNode({
         status: "done",
         note:
           count > 0
-            ? `Added ${count} idea${count === 1 ? "" : "s"} to your hubs.`
+            ? `Added ${count} idea${count === 1 ? "" : "s"} from this video.`
             : "These ideas are already on your canvas.",
         resultCount: count,
       });
