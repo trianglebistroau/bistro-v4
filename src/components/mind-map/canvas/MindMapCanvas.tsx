@@ -461,12 +461,12 @@ function CanvasRoot() {
 
   return (
     <div className="w-full h-full flex flex-col bg-white overflow-hidden">
-      <header className="shrink-0 h-11 border-b border-gray-100 flex items-center px-4 gap-3">
-        <span className="text-sm font-semibold text-gray-800 tracking-tight">
+      {/* <header className="shrink-0 h-11 border-b border-gray-100 flex items-center px-4 gap-3"> */}
+        {/* <span className="text-sm font-semibold text-gray-800 tracking-tight">
           Mind Map
         </span>
-        <ActiveToolBadge />
-      </header>
+        <ActiveToolBadge /> */}
+      {/* </header> */}
 
       <div className="relative flex-1 overflow-hidden">
         <ReactFlowProvider key={mapId}>

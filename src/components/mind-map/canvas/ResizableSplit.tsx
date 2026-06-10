@@ -1,8 +1,7 @@
 "use client";
 
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { PanelLeftOpen } from "lucide-react";
+import { createContext, type ReactNode, useRef, useState } from "react";
 import {
   type ImperativePanelHandle,
   Panel,
@@ -14,6 +13,12 @@ interface Props {
   left: ReactNode;
   right: ReactNode;
 }
+
+// Lets the left-panel content (the embedded Creative Helper) render its own
+// collapse button in its header, instead of a floating absolute button.
+export const SplitContext = createContext<{ collapse: () => void } | null>(
+  null,
+);
 
 // Left-panel sizes the handle soft-snaps to when a drag ends nearby.
 const SNAP_POINTS = [30, 50];
@@ -42,41 +47,46 @@ export default function ResizableSplit({ left, right }: Props) {
   }
 
   return (
-    <div className="relative h-full w-full">
-      <PanelGroup direction="horizontal" className="h-full">
-        <Panel
-          ref={leftRef}
-          collapsible
-          collapsedSize={0}
-          defaultSize={30}
-          minSize={15}
-          maxSize={50}
-          onCollapse={() => setCollapsed(true)}
-          onExpand={() => setCollapsed(false)}
-          className="overflow-hidden"
-        >
-          {left}
-        </Panel>
+    <SplitContext.Provider value={{ collapse: toggleCollapse }}>
+      <div className="relative h-full w-full">
+        <PanelGroup direction="horizontal" className="h-full">
+          <Panel
+            ref={leftRef}
+            collapsible
+            collapsedSize={0}
+            defaultSize={30}
+            minSize={15}
+            maxSize={50}
+            onCollapse={() => setCollapsed(true)}
+            onExpand={() => setCollapsed(false)}
+            className="overflow-hidden"
+          >
+            {left}
+          </Panel>
 
-        <PanelResizeHandle
-          onDragging={handleDragging}
-          className="group relative w-1.5 bg-gray-100 transition-colors data-[resize-handle-state=drag]:bg-[var(--color-primary)] data-[resize-handle-state=hover]:bg-blue-200"
-        >
-          <span className="absolute inset-y-0 -left-1.5 -right-1.5" />
-        </PanelResizeHandle>
+          <PanelResizeHandle
+            onDragging={handleDragging}
+            className="group relative w-1.5 bg-gray-100 transition-colors data-[resize-handle-state=drag]:bg-[var(--color-primary)] data-[resize-handle-state=hover]:bg-blue-200"
+          >
+            <span className="absolute inset-y-0 -left-1.5 -right-1.5" />
+          </PanelResizeHandle>
 
-        <Panel className="relative">{right}</Panel>
-      </PanelGroup>
+          <Panel className="relative">{right}</Panel>
+        </PanelGroup>
 
-      {/* Collapse / expand toggle */}
-      <button
-        type="button"
-        onClick={toggleCollapse}
-        aria-label={collapsed ? "Expand panel" : "Collapse panel"}
-        className="absolute left-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50"
-      >
-        {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-      </button>
-    </div>
+        {/* Expand tab — only when collapsed (panel hidden, so the helper's own
+            header button isn't reachable). No overlap then. */}
+        {collapsed && (
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            aria-label="Expand panel"
+            className="absolute left-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <PanelLeftOpen size={16} />
+          </button>
+        )}
+      </div>
+    </SplitContext.Provider>
   );
 }

@@ -5,13 +5,18 @@ import {
   ListChecks,
   Lock,
   PanelLeftClose,
-  PanelLeftOpen,
   RotateCcw,
   Workflow,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
+import {
+  type ReactNode,
+  useContext,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { SplitContext } from "@/components/mind-map/canvas/ResizableSplit";
 import {
   getSummaryStatus,
   subscribeSummaryStatus,
@@ -181,7 +186,11 @@ export default function CreativeHelperSidebar({
   const pathname = usePathname();
   const params = useSearchParams();
   const summaryStatus = useSummaryStatus();
+  const split = useContext(SplitContext);
   const [collapsed, setCollapsed] = useState(false);
+
+  // Collapse handler: embedded → the canvas split; standalone → own rail.
+  const collapse = embedded ? split?.collapse : () => setCollapsed(true);
 
   // Carry the active idea (?script=<id>) across step navigation so switching
   // stages keeps the user in their current script instead of the default map.
@@ -221,10 +230,10 @@ export default function CreativeHelperSidebar({
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          aria-label="Expand Creative Helper"
-          className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100"
+          aria-label="Collapse Creative Helper"
+          className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100"
         >
-          <PanelLeftOpen size={18} />
+          <PanelLeftClose size={18} />
         </button>
         <StepTabs
           activeIndex={activeIndex}
@@ -251,17 +260,17 @@ export default function CreativeHelperSidebar({
         embedded ? "w-full" : "w-[340px]"
       }`}
     >
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
+      {/* Header — collapse button sits on the right, in normal flow. */}
+      <div className="flex shrink-0 items-center border-b border-gray-100 px-5 py-4">
         <h2 className="text-lg font-bold text-gray-800">
           Your Creative Helper
         </h2>
-        {!embedded && (
+        {collapse && (
           <button
             type="button"
-            onClick={() => setCollapsed(true)}
+            onClick={collapse}
             aria-label="Collapse Creative Helper"
-            className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100"
+            className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100"
           >
             <PanelLeftClose size={18} />
           </button>
