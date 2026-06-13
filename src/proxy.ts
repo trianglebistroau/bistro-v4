@@ -12,13 +12,11 @@ export default clerkMiddleware(
       await auth.protect()
     }
   },
-  process.env.NODE_ENV === 'production' 
-    ? { 
-        frontendApiProxy: {
-          enabled: true,
-        }
-      } 
-    : undefined
+  { 
+    frontendApiProxy: {
+      enabled: process.env.NEXT_PUBLIC_ENABLE_CLERK_PROXY === 'true',
+    }
+  } 
 )
 
 export const config = {
