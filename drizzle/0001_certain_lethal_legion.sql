@@ -1,0 +1,1 @@
+ALTER TABLE "demo_users" ADD COLUMN "profile_picture" text;
