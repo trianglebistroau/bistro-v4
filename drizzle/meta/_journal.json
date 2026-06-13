@@ -15,6 +15,13 @@
       "when": 1781351698228,
       "tag": "0001_certain_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781364792792,
+      "tag": "0002_amused_dark_beast",
+      "breakpoints": true
     }
   ]
 }
