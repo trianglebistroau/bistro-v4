@@ -6,14 +6,18 @@ if (!process.env.DATABASE_URL) {
 }
 
 export default defineConfig({
-  schema: './src/lib/db/schema/index.ts', // Your schema file path
+  schema: './src/lib/db/schema', // Your schema file path
   out: './drizzle', // Your migrations folder
   dialect: 'postgresql',
   dbCredentials: {
     url: process.env.DATABASE_URL,
   },
   casing: 'snake_case',
-  schemaFilter: ['bistro_fe'],
+  schemaFilter: ['nextjs_app_schema'],
   strict: true,
   verbose: true,
+  migrations: {
+    table: 'migrations', // `__drizzle_migrations` by default
+    schema: 'nextjs_app_schema', // used in PostgreSQL only, `drizzle` by default
+  },
 });

@@ -1,12 +1,12 @@
 import { jsonb, serial, text, varchar } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm/relations";
 import { timestamps } from "../utils";
-import { bistroFeSchema } from "./schema";
+import { nextJsAppSchema } from "./schema";
 import { summaries } from "./summaries";
 import { tasks } from "./tasks";
 import { users } from "./users";
 
-export const folders = bistroFeSchema.table('folders', {
+export const folders = nextJsAppSchema.table('folders', {
   id: serial().primaryKey(),
   userId: text().references(() => users.id),
   name: varchar({ length: 255 }),
