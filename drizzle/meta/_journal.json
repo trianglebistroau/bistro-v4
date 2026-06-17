@@ -22,6 +22,20 @@
       "when": 1781681030518,
       "tag": "0002_yellow_daimon_hellstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781682409771,
+      "tag": "0003_fixed_absorbing_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781682474558,
+      "tag": "0004_odd_wallop",
+      "breakpoints": true
     }
   ]
 }
