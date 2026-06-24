@@ -5,6 +5,8 @@ export interface PlanTask {
   id: string;
   text: string;
   scheduledDate?: string;
+  scheduledStartTime?: string; // "HH:MM"
+  scheduledEndTime?: string;   // "HH:MM"
   completed: boolean;
   colorTag: "pink" | "blue" | "yellow" | "default";
   phase: PlanPhase;
@@ -15,8 +17,10 @@ export interface CalendarEvent {
   /** Folder (creative script/idea) this event belongs to. */
   scriptId: string;
   date: string;
-  /** Optional intra-day ordering, "HH:MM". */
+  /** Optional start time "HH:MM". */
   time?: string;
+  /** Optional end time "HH:MM". */
+  endTime?: string;
   title: string;
   notes: string[];
 }
@@ -28,6 +32,9 @@ export interface EnrichedCalendarEvent extends CalendarEvent {
   colorTag: "blue" | "yellow" | "pink";
   /** Set when this entry is derived from a scheduled plan task (read-only). */
   taskId?: string;
+  /** Production phase — drives filter + colour on the calendar page. */
+  phase?: PlanPhase;
 }
 
 export type CalendarView = "monthly" | "weekly";
+export type CalendarPageView = "day" | "3day" | "week" | "month";

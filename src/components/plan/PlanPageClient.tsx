@@ -12,7 +12,7 @@ import {
   getSummariseData,
   savePlanTasks,
 } from "@/utils/plan";
-import EventDetailCard from "./EventDetailCard";
+import DayScheduleCard from "./DayScheduleCard";
 import ExecutionCalendar from "./ExecutionCalendar";
 import PlanBoard from "./PlanBoard";
 
@@ -136,13 +136,14 @@ export default function PlanPageClient() {
                 onSelectDate={handleDateSelect}
               />
             </div>
-            <EventDetailCard
+            <DayScheduleCard
               event={selectedEvent}
               tasks={selectedTasks}
               date={selectedDate}
             />
           </div>
         </div>
+
       </div>
     </div>
   );

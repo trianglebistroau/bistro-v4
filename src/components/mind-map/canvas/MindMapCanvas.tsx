@@ -8,9 +8,7 @@ import {
   Controls,
   type Edge,
   MiniMap,
-  type Node,
   type OnConnect,
-  type OnNodeDrag,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -51,6 +49,7 @@ import {
 import { EDGE_MARKER, edgeTypes } from "@/components/mind-map/edges/edgeTypes";
 import { useEraser } from "@/components/mind-map/hooks/useEraser";
 import { useKeyboardShortcuts } from "@/components/mind-map/hooks/useKeyboardShortcuts";
+import { useNodeDragConnect } from "@/components/mind-map/hooks/useNodeDragConnect";
 import { nodeTypes } from "@/components/mind-map/nodes/nodeTypes";
 import { DEFAULT_DIMS } from "@/components/mind-map/nodes/ShapeNode";
 
@@ -66,22 +65,6 @@ const CURSOR: Record<Tool, string> = {
   video: "crosshair",
 };
 
-// Class applied to the node currently underneath a dragged node.
-const DROP_TARGET_CLASS = "mm-drop-target";
-
-function setNodeHighlight(nodeId: string | null) {
-  for (const el of document.querySelectorAll(
-    `.react-flow__node.${DROP_TARGET_CLASS}`,
-  )) {
-    el.classList.remove(DROP_TARGET_CLASS);
-  }
-  if (nodeId) {
-    document
-      .querySelector(`.react-flow__node[data-id="${nodeId}"]`)
-      ?.classList.add(DROP_TARGET_CLASS);
-  }
-}
-
 // ─── Inner canvas (must be inside ReactFlowProvider) ─────────────────────────
 
 function CanvasInner() {
@@ -94,7 +77,6 @@ function CanvasInner() {
     addNodes,
     getViewport,
     setViewport,
-    getIntersectingNodes,
   } = useReactFlow();
   const router = useRouter();
   const params = useSearchParams();
@@ -127,9 +109,6 @@ function CanvasInner() {
     }, 400);
     return () => clearTimeout(t);
   }, [mapId, nodes, edges, getViewport]);
-
-  // Id of the node a dragged node is currently hovering over (drop target).
-  const dropTargetRef = useRef<string | null>(null);
 
   const isSelectTool = activeTool === "select";
 
@@ -201,64 +180,7 @@ function CanvasInner() {
   );
 
   // ── Hover-to-connect — drag a node onto another to auto-link them ──────────
-  const firstIntersectingId = useCallback(
-    (node: Node): string | null => {
-      const hit = getIntersectingNodes(node, true).find(
-        (n) => n.id !== node.id,
-      );
-      return hit?.id ?? null;
-    },
-    [getIntersectingNodes],
-  );
-
-  const onNodeDrag: OnNodeDrag = useCallback(
-    (_e, node) => {
-      const targetId = firstIntersectingId(node);
-      if (targetId !== dropTargetRef.current) {
-        dropTargetRef.current = targetId;
-        setNodeHighlight(targetId);
-      }
-    },
-    [firstIntersectingId],
-  );
-
-  const onNodeDragStop: OnNodeDrag = useCallback(
-    (_e, node) => {
-      const targetId = dropTargetRef.current;
-      dropTargetRef.current = null;
-      setNodeHighlight(null);
-      if (!targetId) return;
-
-      const target = getNodes().find((n) => n.id === targetId);
-      if (!target) return;
-
-      // Skip if these two are already linked (either direction).
-      const alreadyLinked = getEdges().some(
-        (e) =>
-          (e.source === target.id && e.target === node.id) ||
-          (e.source === node.id && e.target === target.id),
-      );
-      if (!alreadyLinked) {
-        const { sourceHandle, targetHandle } = pickHandles(target, node);
-        setEdges((eds) =>
-          addEdge(
-            {
-              id: `e-${target.id}-${node.id}`,
-              source: target.id,
-              target: node.id,
-              sourceHandle,
-              targetHandle,
-              type: "labeled",
-              data: { arrowEnd: true },
-              markerEnd: EDGE_MARKER,
-            },
-            eds,
-          ),
-        );
-      }
-    },
-    [getNodes, getEdges, setEdges],
-  );
+  const { onNodeDrag, onNodeDragStop } = useNodeDragConnect({ setEdges });
 
   // ── Manual save ────────────────────────────────────────────────────────────
   const [savedFlash, setSavedFlash] = useState(false);
@@ -270,9 +192,12 @@ function CanvasInner() {
 
   // ── Finalise — export graph, submit to backend, go to summarise ────────────
   const handleFinalise = useCallback(() => {
-    submitMindMap(exportMindMapGraph(nodes, edges));
+    const scriptId = mapId !== "default" ? mapId : undefined;
+    submitMindMap(exportMindMapGraph(nodes, edges, scriptId));
+    console.log("Submitted graph:", exportMindMapGraph(nodes, edges));
     // Keep the active idea in the URL so the summarise/plan stages stay in this
     // script's context rather than the default map.
+    
     const query =
       mapId !== "default" ? `?script=${encodeURIComponent(mapId)}` : "";
     router.push(`/summarise${query}`);

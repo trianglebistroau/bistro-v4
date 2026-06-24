@@ -1,11 +1,9 @@
 "use client";
 
 import { useReactFlow } from "@xyflow/react";
-import { GripVertical, HelpCircle, RotateCcw } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import CreativeFlowReminder from "@/components/creative/CreativeFlowReminder";
+import { GripVertical } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   MIND_MAP_GROUPS,
   type MindMapGroup,
@@ -16,25 +14,13 @@ import {
   type TopicDragPayload,
   VIDEO_DND_MIME,
 } from "@/components/mind-map/utils/spawnTopic";
-import { getScripts, platformLabel } from "@/utils/creative";
 import { loadCustomItems, saveCustomItems } from "@/utils/mind-map-store";
-
-import { PlatformIcon } from "../../creative/platformIcons";
 
 export default function MindMapSidePanel() {
   const { addNodes } = useReactFlow();
-  const router = useRouter();
   const params = useSearchParams();
   const scriptId = params.get("script");
   const mapId = scriptId ?? "default";
-
-  // The active script — drives the read-only platform/goal box above the
-  // shortlist. Copied verbatim from the create-project modal; not editable here.
-  const script = useMemo(
-    () =>
-      scriptId ? (getScripts().find((s) => s.id === scriptId) ?? null) : null,
-    [scriptId],
-  );
 
   // "Add Your Own" disabled for now — state kept commented for later re-enable.
   // const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -58,16 +44,6 @@ export default function MindMapSidePanel() {
     const t = setTimeout(() => saveCustomItems(mapId, customItems), 300);
     return () => clearTimeout(t);
   }, [mapId, customItems]);
-
-  const [guideOpen, setGuideOpen] = useState(false);
-  const [guidePos, setGuidePos] = useState({ top: 0, left: 0 });
-  const guideBtnRef = useRef<HTMLButtonElement>(null);
-
-  function openGuide() {
-    const rect = guideBtnRef.current?.getBoundingClientRect();
-    if (rect) setGuidePos({ top: rect.top, left: rect.right + 8 });
-    setGuideOpen(true);
-  }
 
   // Click spawns at the hub's default stagger; drag (below) lets the cursor
   // decide placement. Both funnel through the shared spawn helper.
@@ -99,66 +75,7 @@ export default function MindMapSidePanel() {
   // }
 
   return (
-    // Chrome (scroll, padding, heading bar) is owned by CreativeHelperSidebar;
-    // this renders just the shortlist content nested in its tab content area.
     <div className="flex flex-col gap-6">
-      {/* Read-only goal box — platform + description copied from the create
-          step. Shown above the shortlist; not editable here. */}
-      {script && (
-        <div className="flex flex-col gap-4">
-          <div>
-            {script.platform && (
-              <div className="flex items-center gap-2">
-                <PlatformIcon platform={script.platform} size={20} />
-                <span className="text-sm font-semibold text-gray-700">
-                  {platformLabel(script.platform)}
-                </span>
-                <span className="ml-auto flex items-center gap-2">
-                  <button
-                    ref={guideBtnRef}
-                    type="button"
-                    aria-label="Show creative flow guide"
-                    onMouseEnter={openGuide}
-                    onMouseLeave={() => setGuideOpen(false)}
-                    className="grid h-6 w-6 place-items-center rounded-full border border-gray-200 text-gray-400 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-                  >
-                    <HelpCircle size={14} />
-                  </button>
-
-                  {guideOpen &&
-                    createPortal(
-                      <div
-                        role="tooltip"
-                        onMouseEnter={() => setGuideOpen(true)}
-                        onMouseLeave={() => setGuideOpen(false)}
-                        style={{ top: guidePos.top, left: guidePos.left }}
-                        className="fixed z-[9999] w-72 rounded-2xl border border-gray-100 bg-white p-4 shadow-lg"
-                      >
-                        <CreativeFlowReminder />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            router.push("/creative/guide?rewatch=1")
-                          }
-                          className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-                        >
-                          <RotateCcw size={15} />
-                          Watch guide
-                        </button>
-                      </div>,
-                      document.body,
-                    )}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <p className="flex flex-col gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm font-semibold text-gray-700">
-            {script.goal?.trim() || script.title}
-          </p>
-        </div>
-      )}
-
       {MIND_MAP_GROUPS.filter((group) => !group.fromScript).map((group) => {
         const sections = group.sections;
 

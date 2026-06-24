@@ -1,5 +1,5 @@
 import type { CreativeScript } from "@/types/creative";
-import type { CalendarEvent, EnrichedCalendarEvent } from "@/types/plan";
+import type { CalendarEvent, EnrichedCalendarEvent, PlanPhase } from "@/types/plan";
 import { getScripts } from "@/utils/creative";
 import { notifyDataChange } from "@/utils/dataSync";
 import { getPlanTasks } from "@/utils/plan";
@@ -84,6 +84,20 @@ const COLORS: Record<"blue" | "yellow" | "pink", ColorClasses> = {
 
 export function colorFor(tag?: string): ColorClasses {
   return COLORS[tag as "blue" | "yellow" | "pink"] ?? COLORS.blue;
+}
+
+// Phase-based colour for calendar page event blocks.
+const PHASE_COLORS: Record<PlanPhase, string> = {
+  pre: "bg-[#FF9699] border-[#FF9699] text-gray-900",
+  production: "bg-[#73B7FF] border-[#73B7FF] text-gray-900",
+  post: "bg-[#FBBF24] border-[#FBBF24] text-gray-900",
+};
+
+export function phaseEventColor(ev: EnrichedCalendarEvent): string {
+  if (ev.phase) return PHASE_COLORS[ev.phase];
+  if (ev.colorTag === "pink") return PHASE_COLORS.pre;
+  if (ev.colorTag === "yellow") return PHASE_COLORS.post;
+  return PHASE_COLORS.production;
 }
 
 // ── Per-folder distinct colour ─────────────────────────────────────────────
@@ -193,11 +207,14 @@ export function getAllEvents(): EnrichedCalendarEvent[] {
         id: `task-${t.id}`,
         scriptId: s.id,
         date: t.scheduledDate,
+        time: t.scheduledStartTime,
+        endTime: t.scheduledEndTime,
         title: t.text,
         notes: [],
         scriptTitle: s.title,
         colorTag,
         taskId: t.id,
+        phase: t.phase,
       });
     }
   }

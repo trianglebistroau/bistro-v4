@@ -88,7 +88,17 @@ export default function CreativeGuideClient() {
             </button>
           </div>
 
-          <div className="w-20 md:w-28" />
+          <div className="flex w-20 justify-end md:w-28">
+            {!isRewatch && (
+              <button
+                type="button"
+                onClick={handleFinish}
+                className="text-sm text-gray-400 underline-offset-2 transition-colors hover:text-gray-600 hover:underline"
+              >
+                Skip
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
