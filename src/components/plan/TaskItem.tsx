@@ -2,6 +2,7 @@
 
 import { CalendarIcon, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PlanTask } from "@/types/plan";
 
 interface Props {
@@ -26,6 +27,15 @@ function formatDate(iso: string): string {
   return `${day}/${month}/${year}`;
 }
 
+function formatTime(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(":");
+  const h = parseInt(hStr, 10);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${mStr} ${period}`;
+}
+
+
 export default function TaskItem({
   task,
   onUpdate,
@@ -34,18 +44,33 @@ export default function TaskItem({
   accentCls,
 }: Props) {
   const [showPicker, setShowPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState<"date" | "time">("date");
+  const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.text);
   const inputRef = useRef<HTMLInputElement>(null);
+  const calBtnRef = useRef<HTMLButtonElement>(null);
 
   function handleCalendarClick() {
+    const rect = calBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPickerPos({ top: rect.bottom + 6, left: rect.right - 224 });
+    }
     setShowPicker((v) => !v);
+    setPickerTab("date");
     setTimeout(() => inputRef.current?.showPicker?.(), 50);
   }
 
   function handleDateChange(e: React.ChangeEvent<HTMLInputElement>) {
     onUpdate({ ...task, scheduledDate: e.target.value });
-    setShowPicker(false);
+  }
+
+  function handleStartTimeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    onUpdate({ ...task, scheduledStartTime: e.target.value || undefined });
+  }
+
+  function handleEndTimeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    onUpdate({ ...task, scheduledEndTime: e.target.value || undefined });
   }
 
   function startEdit() {
@@ -59,18 +84,72 @@ export default function TaskItem({
     setEditing(false);
   }
 
-  const picker = showPicker && (
-    <div className="absolute right-0 top-9 z-20 bg-white rounded-2xl shadow-lg border border-gray-100 p-3">
-      <p className="text-xs text-gray-400 mb-2">Which day to add?</p>
-      <input
-        ref={inputRef}
-        type="date"
-        defaultValue={task.scheduledDate ?? ""}
-        onChange={handleDateChange}
-        className="text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-      />
+  const inputCls =
+    "w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]";
+
+  const pickerContent = (
+    <div
+      style={{ top: pickerPos.top, left: pickerPos.left }}
+      className="fixed z-[9999] bg-white rounded-2xl shadow-lg border border-gray-100 p-3 w-56"
+    >
+      {/* Tabs */}
+      <div className="flex gap-1 mb-3 rounded-lg bg-gray-100 p-0.5">
+        {(["date", "time"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setPickerTab(tab)}
+            className={`flex-1 rounded-md py-1 text-xs font-semibold transition-colors capitalize ${
+              pickerTab === tab
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {pickerTab === "date" ? (
+        <>
+          <p className="text-xs text-gray-400 mb-2">Which day?</p>
+          <input
+            ref={inputRef}
+            type="date"
+            defaultValue={task.scheduledDate ?? ""}
+            onChange={handleDateChange}
+            className={inputCls}
+          />
+        </>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Start time</p>
+            <input
+              type="time"
+              value={task.scheduledStartTime ?? ""}
+              onChange={handleStartTimeChange}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 mb-1">End time</p>
+            <input
+              type="time"
+              value={task.scheduledEndTime ?? ""}
+              onChange={handleEndTimeChange}
+              className={inputCls}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  const picker =
+    showPicker && typeof document !== "undefined"
+      ? createPortal(pickerContent, document.body)
+      : null;
 
   // ── Board card: white card with the text and a calendar trigger inside ──
   if (variant === "card") {
@@ -106,7 +185,9 @@ export default function TaskItem({
               {formatDate(task.scheduledDate)}
             </span>
           )}
+
           <button
+            ref={calBtnRef}
             type="button"
             onClick={handleCalendarClick}
             aria-label={task.scheduledDate ? "Change date" : "Add date"}
@@ -139,13 +220,14 @@ export default function TaskItem({
         {task.text}
       </div>
 
-      <div className="relative shrink-0">
+      <div className="shrink-0">
         {task.scheduledDate ? (
           <div className="flex items-center gap-1">
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
               {formatDate(task.scheduledDate)}
             </span>
             <button
+              ref={calBtnRef}
               type="button"
               onClick={handleCalendarClick}
               aria-label="Change date"
@@ -156,6 +238,7 @@ export default function TaskItem({
           </div>
         ) : (
           <button
+            ref={calBtnRef}
             type="button"
             onClick={handleCalendarClick}
             aria-label="Add date"

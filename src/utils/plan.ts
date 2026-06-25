@@ -1,5 +1,6 @@
 import type { PlanTask } from "@/types/plan";
 import type { ConceptMeta, ShotData } from "@/types/summarise";
+import { notifyDataChange } from "@/utils/dataSync";
 
 const KEYS = {
   summarise: "bistro_summarise_data",
@@ -25,7 +26,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation.",
     shootingStyle: "Wide shot",
-    cameraAngle: "Wide shot",
+    audio: "Wide shot",
     script: [
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit,",
       "sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
@@ -37,7 +38,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation.",
     shootingStyle: "Wide shot",
-    cameraAngle: "Wide shot",
+    audio: "Wide shot",
     script: [
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit,",
       "sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
@@ -49,7 +50,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation.",
     shootingStyle: "Wide shot",
-    cameraAngle: "Wide shot",
+    audio: "Wide shot",
     script: [
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit,",
       "sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
@@ -61,7 +62,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Camera follows subject through narrow trail at golden hour. Warm bokeh fills the background as subject pauses to look at the sky. Motion is slow and deliberate.",
     shootingStyle: "Tracking shot",
-    cameraAngle: "Eye level",
+    audio: "Eye level",
     script: [
       "Follow subject from behind at a steady walking pace.",
       "Slow pull focus from subject to distant mountains.",
@@ -73,7 +74,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Extreme close-up of hands setting up telescope equipment. Detail-driven shot establishing the preparation ritual before the main stargazing event begins.",
     shootingStyle: "Close-up",
-    cameraAngle: "Top-down / Bird's eye",
+    audio: "Top-down / Bird's eye",
     script: [
       "Start tight on hands unboxing the telescope lens.",
       "Slow tilt up to reveal the full setup on the blanket.",
@@ -85,7 +86,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Low angle looking up at subject silhouetted against a star-filled sky. Milky Way visible in the frame. Long exposure quality with slight lens flare from torch.",
     shootingStyle: "Long exposure style",
-    cameraAngle: "Low angle",
+    audio: "Low angle",
     script: [
       "Position camera at ground level, lens pointing up.",
       "Subject stands motionless for dramatic silhouette.",
@@ -97,7 +98,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Over-the-shoulder shot of subject sketching or journaling in the dark with a small headlamp. Captures the intimate, quiet atmosphere of the night.",
     shootingStyle: "Over-the-shoulder",
-    cameraAngle: "Medium shot",
+    audio: "Medium shot",
     script: [
       "Frame over right shoulder with journal in foreground.",
       "Soft ambient sound — wind, crickets — no voiceover.",
@@ -109,7 +110,7 @@ const SEED_SHOTS: ShotData[] = [
     description:
       "Time-lapse of stars rotating overhead with tent and subject in foreground. Cinematic final sequence that gives sense of scale and passage of time across the night.",
     shootingStyle: "Time-lapse",
-    cameraAngle: "Wide angle / Ultra-wide",
+    audio: "Wide angle / Ultra-wide",
     script: [
       "Lock off camera on tripod with 14mm or wider lens.",
       "Capture minimum 300 frames for smooth 10s clip.",
@@ -210,6 +211,8 @@ export function getDefaultPlanTasks(): PlanTask[] {
 
 export function savePlanTasks(scriptId: string, tasks: PlanTask[]): void {
   safeSet(tasksKey(scriptId), tasks);
+  // Scheduled-task dates feed the shared calendar — notify other views.
+  notifyDataChange();
 }
 
 export function getSummariseData(): { meta: ConceptMeta; shots: ShotData[] } {

@@ -1,9 +1,9 @@
 export interface ShotData {
   shotNumber: number;
-  storyboardUrl?: string;
+  time?: string;
   description: string;
   shootingStyle: string;
-  cameraAngle: string;
+  audio: string;
   script: string[];
 }
 

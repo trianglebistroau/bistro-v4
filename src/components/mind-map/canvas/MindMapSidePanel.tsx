@@ -1,9 +1,9 @@
 "use client";
 
 import { useReactFlow } from "@xyflow/react";
-import { GripVertical, Plus } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MIND_MAP_GROUPS,
   type MindMapGroup,
@@ -12,27 +12,19 @@ import {
   spawnTopicNode,
   TOPIC_DND_MIME,
   type TopicDragPayload,
+  VIDEO_DND_MIME,
 } from "@/components/mind-map/utils/spawnTopic";
-import { getScripts, platformLabel } from "@/utils/creative";
 import { loadCustomItems, saveCustomItems } from "@/utils/mind-map-store";
 
 export default function MindMapSidePanel() {
-  const { addNodes, addEdges, getNode, getNodes } = useReactFlow();
+  const { addNodes } = useReactFlow();
   const params = useSearchParams();
   const scriptId = params.get("script");
   const mapId = scriptId ?? "default";
 
-  // The active script — drives the read-only platform/goal box above the
-  // shortlist. Copied verbatim from the create-project modal; not editable here.
-  const script = useMemo(
-    () =>
-      scriptId ? (getScripts().find((s) => s.id === scriptId) ?? null) : null,
-    [scriptId],
-  );
-
-  // Which section's "Add Your Own" input is open, and its draft value.
-  const [addingKey, setAddingKey] = useState<string | null>(null);
-  const [addValue, setAddValue] = useState("");
+  // "Add Your Own" disabled for now — state kept commented for later re-enable.
+  // const [addingKey, setAddingKey] = useState<string | null>(null);
+  // const [addValue, setAddValue] = useState("");
   // User-added topics, kept in the panel as selectable chips (per section).
   // They only land on the mind map when their chip is pressed. Persisted per
   // map so the shortlist survives leaving and returning to the canvas.
@@ -56,7 +48,7 @@ export default function MindMapSidePanel() {
   // Click spawns at the hub's default stagger; drag (below) lets the cursor
   // decide placement. Both funnel through the shared spawn helper.
   function spawnTopic(group: MindMapGroup, label: string) {
-    spawnTopicNode({ addNodes, addEdges, getNode, getNodes }, group, label);
+    spawnTopicNode({ addNodes }, group, label);
   }
 
   function handleDragStart(
@@ -70,38 +62,20 @@ export default function MindMapSidePanel() {
   }
 
   // Add the typed topic to the section's chip list — does NOT spawn a node.
-  function handleAddSubmit(sectionKey: string) {
-    const text = addValue.trim();
-    if (!text) return;
-    setCustomItems((prev) => ({
-      ...prev,
-      [sectionKey]: [...(prev[sectionKey] ?? []), text],
-    }));
-    setAddValue("");
-    setAddingKey(null);
-  }
+  // Disabled for now along with the "Add Your Own" UI; kept for later re-enable.
+  // function handleAddSubmit(sectionKey: string) {
+  //   const text = addValue.trim();
+  //   if (!text) return;
+  //   setCustomItems((prev) => ({
+  //     ...prev,
+  //     [sectionKey]: [...(prev[sectionKey] ?? []), text],
+  //   }));
+  //   setAddValue("");
+  //   setAddingKey(null);
+  // }
 
   return (
-    // Chrome (scroll, padding, heading bar) is owned by CreativeHelperSidebar;
-    // this renders just the shortlist content nested in its tab content area.
     <div className="flex flex-col gap-6">
-      <h2 className="text-base font-bold text-gray-800">Your idea</h2>
-
-      {/* Read-only goal box — platform + description copied from the create
-          step. Shown above the shortlist; not editable here. */}
-      {script && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          {script.platform && (
-            <span className="w-fit rounded-full bg-[var(--color-primary)] px-3 py-1 text-[11px] font-semibold text-white">
-              {platformLabel(script.platform)}
-            </span>
-          )}
-          <p className="text-sm text-gray-700">
-            {script.goal?.trim() || script.title}
-          </p>
-        </div>
-      )}
-
       {MIND_MAP_GROUPS.filter((group) => !group.fromScript).map((group) => {
         const sections = group.sections;
 
@@ -148,6 +122,7 @@ export default function MindMapSidePanel() {
                     ),
                   )}
 
+                  {/* "Add Your Own" disabled for now — kept for later re-enable.
                   {section.allowAdd &&
                     (addingKey === sectionKey ? (
                       <div className="flex gap-1.5">
@@ -161,12 +136,12 @@ export default function MindMapSidePanel() {
                             if (e.key === "Escape") setAddingKey(null);
                           }}
                           placeholder="Your own topic…"
-                          className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 outline-none focus:border-[var(--color-primary)]"
+                          className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 outline-none focus:border-primary"
                         />
                         <button
                           type="button"
                           onClick={() => handleAddSubmit(sectionKey)}
-                          className="shrink-0 rounded-xl bg-[var(--color-primary)] px-3 text-xs font-semibold text-white"
+                          className="shrink-0 rounded-xl bg-primary px-3 text-xs font-semibold text-white"
                         >
                           Add
                         </button>
@@ -184,12 +159,50 @@ export default function MindMapSidePanel() {
                         Add Your Own
                       </button>
                     ))}
+                  */}
                 </div>
               );
             })}
           </div>
         );
       })}
+
+      {/* Video Analysis — draggable card that drops a VideoDropNode onto canvas */}
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-bold text-gray-700">Video Analysis</h3>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: draggable card */}
+        <div
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData(VIDEO_DND_MIME, "1");
+            e.dataTransfer.effectAllowed = "copy";
+          }}
+          className="flex cursor-grab flex-col items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-5 text-center transition-colors hover:border-gray-400 active:cursor-grabbing"
+        >
+          <GripVertical size={13} className="shrink-0 text-gray-400" />
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Drag &amp; drop your inspiration videos, your past posts or whatever
+            you want to replicate in your next idea
+          </p>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-gray-400"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+        </div>
+      </div>
     </div>
   );
 }

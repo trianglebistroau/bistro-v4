@@ -12,7 +12,8 @@ export interface SummariseResult {
 interface ShotApiResponse {
   description: string;
   shooting_style: string;
-  camera_angle: string;
+  audio: string;
+  time?: string;
   script: string;
 }
 
@@ -80,9 +81,10 @@ function shotToRow(shot: ShotApiResponse, i: number): ShotData {
 
   return {
     shotNumber: i + 1,
+    time: shot.time,
     description: shot.description,
     shootingStyle: shot.shooting_style || "—",
-    cameraAngle: shot.camera_angle || "—",
+    audio: shot.audio || "—",
     script: lines.length > 0 ? lines : [shot.script],
   };
 }
