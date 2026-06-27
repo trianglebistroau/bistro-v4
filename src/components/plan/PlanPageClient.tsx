@@ -3,10 +3,9 @@
 import { Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { loadEvents } from "@/lib/db/actions/calendar";
+import { getPlanTasks, savePlanTasks } from "@/lib/db/actions/plan";
 import type { CalendarEvent, PlanTask } from "@/types/plan";
-import { loadEvents } from "@/utils/calendar";
-import { subscribeDataChange } from "@/utils/dataSync";
-import { getPlanTasks, savePlanTasks } from "@/utils/plan";
 import {
   buildPlanSummary,
   buildScheduleText,
@@ -32,24 +31,25 @@ export default function PlanPageClient() {
   const [genError, setGenError] = useState<string | null>(null);
 
   useEffect(() => {
-    setTasks(getPlanTasks(scriptId));
-    setEvents(loadEvents(scriptId));
-    getSummaryResult(scriptId).then((r) =>
-      setProjectName(r?.meta.projectName ?? "Your Idea"),
-    );
-    setMounted(true);
-
-    // Re-read when another view (the global calendar, etc.) writes events/tasks.
-    const unsubscribe = subscribeDataChange(() => {
-      setTasks(getPlanTasks(scriptId));
-      setEvents(loadEvents(scriptId));
+    let active = true;
+    getPlanTasks(scriptId).then((t) => {
+      if (active) setTasks(t);
     });
-    return unsubscribe;
+    loadEvents(scriptId).then((e) => {
+      if (active) setEvents(e);
+    });
+    getSummaryResult(scriptId).then((r) => {
+      if (active) setProjectName(r?.meta.projectName ?? "Your Idea");
+    });
+    setMounted(true);
+    return () => {
+      active = false;
+    };
   }, [scriptId]);
 
   function handleTasksUpdate(updated: PlanTask[]) {
     setTasks(updated);
-    savePlanTasks(scriptId, updated);
+    void savePlanTasks(scriptId, updated);
   }
 
   // Project button → generate the task plan from the completed summary via the

@@ -1,57 +1,14 @@
 import type { CreativeScript } from "@/types/creative";
-import type { CalendarEvent, EnrichedCalendarEvent, PlanPhase } from "@/types/plan";
-import { getScripts } from "@/utils/creative";
-import { notifyDataChange } from "@/utils/dataSync";
-import { getPlanTasks } from "@/utils/plan";
-import { storage } from "@/utils/storage";
+import type {
+  CalendarEvent,
+  EnrichedCalendarEvent,
+  PlanPhase,
+} from "@/types/plan";
 
-// Calendar-events repo — events are stored per folder (creative script), one
-// key per script, through the shared storage seam. Mirrors mind-map-store so a
-// later swap to a DB (calendar_events.script_id) touches one adapter. The
-// calendar page aggregates across all scripts via getAllEvents().
-
-const PREFIX = "bistro_calendar_events_";
-const key = (scriptId: string) => `${PREFIX}${scriptId}`;
-
-export function loadEvents(scriptId: string): CalendarEvent[] {
-  return storage.read<CalendarEvent[]>(key(scriptId), []);
-}
-
-export function saveEvents(scriptId: string, events: CalendarEvent[]): void {
-  storage.write(key(scriptId), events);
-  // Tell other mounted views (e.g. the plan page) to re-read.
-  notifyDataChange();
-}
-
-export function addEvent(
-  scriptId: string,
-  input: { date: string; title: string; notes?: string[]; time?: string },
-): CalendarEvent {
-  const event: CalendarEvent = {
-    id: `evt-${Date.now()}`,
-    scriptId,
-    date: input.date,
-    time: input.time,
-    title: input.title,
-    notes: input.notes ?? [],
-  };
-  saveEvents(scriptId, [...loadEvents(scriptId), event]);
-  return event;
-}
-
-export function updateEvent(scriptId: string, event: CalendarEvent): void {
-  saveEvents(
-    scriptId,
-    loadEvents(scriptId).map((e) => (e.id === event.id ? event : e)),
-  );
-}
-
-export function deleteEvent(scriptId: string, id: string): void {
-  saveEvents(
-    scriptId,
-    loadEvents(scriptId).filter((e) => e.id !== id),
-  );
-}
+// Calendar UI helpers (pure). Event persistence + the cross-folder aggregation
+// (getAllEvents) live in the DB action module src/lib/db/actions/calendar.ts;
+// this file holds the colour mapping + the pure `enrich` join used by the
+// calendar components and covered by scripts/calendar.check.ts.
 
 // ── Colour mapping (per folder colour tag) ─────────────────────────────────
 
@@ -169,7 +126,7 @@ export function colorForScript(scriptId: string): ColorClasses {
   return SCRIPT_PALETTE[hashStr(scriptId) % SCRIPT_PALETTE.length];
 }
 
-// ── Aggregation (pure — unit-tested) ───────────────────────────────────────
+// ── Aggregation (pure — unit-tested via scripts/calendar.check.ts) ──────────
 
 // Join events with their folder's title + colour; drop events whose folder no
 // longer exists so the calendar never renders orphans.
@@ -185,39 +142,4 @@ export function enrich(
       { ...e, scriptTitle: script.title, colorTag: script.colorTag ?? "blue" },
     ];
   });
-}
-
-// All calendar items across every folder: stored events PLUS scheduled plan
-// tasks (so a task with a date shows on the calendar in its folder's colour).
-export function getAllEvents(): EnrichedCalendarEvent[] {
-  const scripts = getScripts();
-  const out: EnrichedCalendarEvent[] = [];
-
-  for (const s of scripts) {
-    const colorTag = s.colorTag ?? "blue";
-
-    for (const e of loadEvents(s.id)) {
-      out.push({ ...e, scriptTitle: s.title, colorTag });
-    }
-
-    // Scheduled plan tasks → read-only calendar entries (tagged with taskId).
-    for (const t of getPlanTasks(s.id)) {
-      if (!t.scheduledDate) continue;
-      out.push({
-        id: `task-${t.id}`,
-        scriptId: s.id,
-        date: t.scheduledDate,
-        time: t.scheduledStartTime,
-        endTime: t.scheduledEndTime,
-        title: t.text,
-        notes: [],
-        scriptTitle: s.title,
-        colorTag,
-        taskId: t.id,
-        phase: t.phase,
-      });
-    }
-  }
-
-  return out;
 }

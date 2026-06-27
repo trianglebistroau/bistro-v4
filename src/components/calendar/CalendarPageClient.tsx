@@ -2,29 +2,28 @@
 
 import { ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { addEvent, getAllEvents, updateEvent } from "@/lib/db/actions/calendar";
+import { listIdeas } from "@/lib/db/actions/ideas";
 import type { CreativeScript } from "@/types/creative";
 import type {
+  CalendarEvent,
   CalendarPageView,
   EnrichedCalendarEvent,
   PlanPhase,
 } from "@/types/plan";
-import { addEvent, deleteEvent, getAllEvents, updateEvent } from "@/utils/calendar";
-import type { CalendarEvent } from "@/types/plan";
-import { getScripts } from "@/utils/creative";
-import { subscribeDataChange } from "@/utils/dataSync";
 import CalendarSidebar from "./CalendarSidebar";
 import CreateEventModal from "./CreateEventModal";
-import EventDetailPanel from "./EventDetailPanel";
-import MonthGrid from "./MonthGrid";
-import TimeGrid from "./TimeGrid";
 import {
-  MONTHS,
   addDays,
   fromISO,
+  MONTHS,
   nDays,
   startOfWeek,
   toISO,
 } from "./dateUtils";
+import EventDetailPanel from "./EventDetailPanel";
+import MonthGrid from "./MonthGrid";
+import TimeGrid from "./TimeGrid";
 
 const VIEW_LABELS: Record<CalendarPageView, string> = {
   day: "Day",
@@ -52,22 +51,26 @@ export default function CalendarPageClient() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const s = getScripts();
-    setScripts(s);
-    setEvents(getAllEvents());
-    setMounted(true);
-
-    const unsub = subscribeDataChange(() => {
-      setScripts(getScripts());
-      setEvents(getAllEvents());
+    let active = true;
+    listIdeas().then((s) => {
+      if (active) setScripts(s);
     });
-    return unsub;
+    getAllEvents().then((e) => {
+      if (active) setEvents(e);
+    });
+    setMounted(true);
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setViewDropdownOpen(false);
       }
     }
@@ -75,8 +78,8 @@ export default function CalendarPageClient() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  function refresh() {
-    setEvents(getAllEvents());
+  async function refresh() {
+    setEvents(await getAllEvents());
   }
 
   function togglePhase(p: PlanPhase) {
@@ -88,12 +91,12 @@ export default function CalendarPageClient() {
     });
   }
 
-  function handleCreate(
+  async function handleCreate(
     scriptId: string,
     input: { date: string; title: string; notes: string[] },
   ) {
-    addEvent(scriptId, input);
-    refresh();
+    await addEvent(scriptId, input);
+    await refresh();
   }
 
   // Days shown for time-grid views
@@ -267,11 +270,12 @@ export default function CalendarPageClient() {
           key={selectedEvent.id}
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
-          onUpdate={(updated) => {
+          onUpdate={async (updated) => {
             // Strip enriched-only fields before persisting
             const { scriptTitle, colorTag, taskId, phase, ...base } = updated;
-            updateEvent(updated.scriptId, base as CalendarEvent);
+            await updateEvent(updated.scriptId, base as CalendarEvent);
             setSelectedEvent(updated);
+            await refresh();
           }}
         />
       )}
