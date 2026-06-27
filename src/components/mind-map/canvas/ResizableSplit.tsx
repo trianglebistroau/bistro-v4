@@ -57,10 +57,10 @@ export default function ResizableSplit({ left, right }: Props) {
           <Panel
             panelRef={leftRef}
             collapsible
-            collapsedSize={0}
-            defaultSize={30}
-            minSize={15}
-            maxSize={50}
+            collapsedSize="0%"
+            defaultSize="30%"
+            minSize="15%"
+            maxSize="50%"
             onResize={(panelSize) => setCollapsed(panelSize.asPercentage === 0)}
             className="overflow-hidden"
           >
