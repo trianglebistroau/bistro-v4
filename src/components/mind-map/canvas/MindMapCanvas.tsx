@@ -26,8 +26,8 @@ import {
   type TopicDragPayload,
   VIDEO_DND_MIME,
 } from "@/components/mind-map/utils/spawnTopic";
+import { loadCanvas, saveCanvas } from "@/lib/db/actions/mindmap";
 import { pickHandles } from "@/utils/mind-map-handles";
-import { loadCanvas, saveCanvas } from "@/utils/mind-map-store";
 import { exportMindMapGraph } from "@/utils/mindmap-export";
 import { submitMindMap } from "@/utils/summarise-service";
 import "@xyflow/react/dist/style.css";
@@ -92,23 +92,45 @@ function CanvasInner() {
   // never write the defaults over saved data before it loads.
   const restored = useRef(false);
   useEffect(() => {
-    const saved = loadCanvas(mapId);
-    if (saved) {
-      setNodes(saved.nodes);
-      setEdges(saved.edges);
-      if (saved.viewport) setViewport(saved.viewport);
-    }
-    restored.current = true;
+    let active = true;
+    loadCanvas(mapId).then((saved) => {
+      if (!active) return;
+      if (saved) {
+        setNodes(saved.nodes);
+        setEdges(saved.edges);
+        if (saved.viewport) setViewport(saved.viewport);
+      }
+      restored.current = true;
+    });
+    return () => {
+      active = false;
+    };
   }, [mapId, setNodes, setEdges, setViewport]);
 
-  // Persist canvas changes, debounced so rapid drags don't thrash storage.
+  // Persist canvas changes, debounced so rapid drags don't thrash the DB.
+  // Fire-and-forget: the server action runs async, the UI doesn't wait on it.
   useEffect(() => {
     if (!restored.current) return;
     const t = setTimeout(() => {
-      saveCanvas(mapId, { nodes, edges, viewport: getViewport() });
+      void saveCanvas(mapId, { nodes, edges, viewport: getViewport() });
     }, 400);
     return () => clearTimeout(t);
   }, [mapId, nodes, edges, getViewport]);
+
+  // Flush the latest canvas on unmount. Switching ideas remounts the flow
+  // (ReactFlowProvider key={mapId}), which would otherwise cancel the pending
+  // debounced save and drop the last edit.
+  useEffect(() => {
+    return () => {
+      if (restored.current) {
+        void saveCanvas(mapId, {
+          nodes: getNodes(),
+          edges: getEdges(),
+          viewport: getViewport(),
+        });
+      }
+    };
+  }, [mapId, getNodes, getEdges, getViewport]);
 
   const isSelectTool = activeTool === "select";
 
@@ -126,7 +148,7 @@ function CanvasInner() {
     onEnd: () => {
       minimapTimer.current = setTimeout(() => setShowMinimap(false), 1500);
       // Viewport-only changes don't trip the node/edge effect — save here too.
-      saveCanvas(mapId, {
+      void saveCanvas(mapId, {
         nodes: getNodes(),
         edges: getEdges(),
         viewport: getViewport(),
@@ -184,8 +206,8 @@ function CanvasInner() {
 
   // ── Manual save ────────────────────────────────────────────────────────────
   const [savedFlash, setSavedFlash] = useState(false);
-  const handleSave = useCallback(() => {
-    saveCanvas(mapId, { nodes, edges, viewport: getViewport() });
+  const handleSave = useCallback(async () => {
+    await saveCanvas(mapId, { nodes, edges, viewport: getViewport() });
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1500);
   }, [mapId, nodes, edges, getViewport]);
@@ -193,7 +215,7 @@ function CanvasInner() {
   // ── Finalise — export graph, submit to backend, go to summarise ────────────
   const handleFinalise = useCallback(async () => {
     const scriptId = mapId !== "default" ? mapId : undefined;
-    submitMindMap(await exportMindMapGraph(nodes, edges, scriptId));
+    submitMindMap(mapId, await exportMindMapGraph(nodes, edges, scriptId));
     // Keep the active idea in the URL so the summarise/plan stages stay in this
     // script's context rather than the default map.
 

@@ -29,16 +29,23 @@ import type { CreativeScript } from "@/types/creative";
 import { platformLabel } from "@/utils/creative";
 import {
   getSummaryStatus,
+  loadSummaryStatus,
   subscribeSummaryStatus,
 } from "@/utils/summarise-service";
 
-// Reactive summary status — drives which downstream stages are unlocked.
-function useSummaryStatus() {
-  return useSyncExternalStore(
+// Reactive summary status for one idea — drives which downstream stages are
+// unlocked. The snapshot is a sync read of the in-memory status cache; an effect
+// hydrates that cache from the DB once the active idea (clientId) is known.
+function useSummaryStatus(clientId: string) {
+  const status = useSyncExternalStore(
     subscribeSummaryStatus,
-    getSummaryStatus,
+    () => getSummaryStatus(clientId),
     () => null,
   );
+  useEffect(() => {
+    void loadSummaryStatus(clientId);
+  }, [clientId]);
+  return status;
 }
 
 // The three creative stages. Each is its own route; in tab mode (onSelect set)
@@ -193,7 +200,7 @@ export default function CreativeHelperSidebar({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const summaryStatus = useSummaryStatus();
+  const summaryStatus = useSummaryStatus(params.get("script") ?? "default");
   const split = useContext(SplitContext);
   const [collapsed, setCollapsed] = useState(false);
 

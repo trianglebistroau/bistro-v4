@@ -16,25 +16,23 @@ export default function SummarisePageClient() {
   const router = useRouter();
   const params = useSearchParams();
   // Carry the active idea across stages so Confirm/Back keep the same script.
-  const script = params.get("script");
-  const scriptQuery = script ? `?script=${encodeURIComponent(script)}` : "";
+  const scriptParam = params.get("script");
+  const clientId = scriptParam ?? "default";
+  const scriptQuery = scriptParam
+    ? `?script=${encodeURIComponent(scriptParam)}`
+    : "";
 
   useEffect(() => {
     let cancelled = false;
-    // Resumes across reloads: returns the in-flight request, the stored result,
-    // or a fresh re-fetch from the saved graph snapshot.
-    const pending = resumeSummary();
-
-    // Never submitted (e.g. direct visit) — nothing to show, bounce back.
-    if (!pending) {
-      router.replace(`/mind-map${scriptQuery}`);
-      return;
-    }
-
-    // Wait for the real backend result; skeleton animates until it lands.
-    pending
+    // Resumes across reloads: the in-flight request, the stored result, or a
+    // fresh re-fetch from the saved graph snapshot (null → never submitted).
+    resumeSummary(clientId)
       .then((result) => {
         if (cancelled) return;
+        if (!result) {
+          router.replace(`/mind-map${scriptQuery}`);
+          return;
+        }
         setData(result);
         setLoadState("ready");
       })
@@ -46,7 +44,7 @@ export default function SummarisePageClient() {
     return () => {
       cancelled = true;
     };
-  }, [router, scriptQuery]);
+  }, [router, clientId, scriptQuery]);
 
   return (
     <div

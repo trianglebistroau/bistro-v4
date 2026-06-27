@@ -43,6 +43,13 @@
       "when": 1782484210404,
       "tag": "0005_military_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782521531157,
+      "tag": "0006_bouncy_mach_iv",
+      "breakpoints": true
     }
   ]
 }

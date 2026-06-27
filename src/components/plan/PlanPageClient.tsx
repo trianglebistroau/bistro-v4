@@ -34,7 +34,9 @@ export default function PlanPageClient() {
   useEffect(() => {
     setTasks(getPlanTasks(scriptId));
     setEvents(loadEvents(scriptId));
-    setProjectName(getSummaryResult()?.meta.projectName ?? "Your Idea");
+    getSummaryResult(scriptId).then((r) =>
+      setProjectName(r?.meta.projectName ?? "Your Idea"),
+    );
     setMounted(true);
 
     // Re-read when another view (the global calendar, etc.) writes events/tasks.
@@ -58,7 +60,7 @@ export default function PlanPageClient() {
   async function generatePlan() {
     if (tasks.length > 0 || isGenerating) return;
 
-    const summary = getSummaryResult();
+    const summary = await getSummaryResult(scriptId);
     if (!summary) {
       setGenError("Summarise your idea first, then generate a plan.");
       return;
