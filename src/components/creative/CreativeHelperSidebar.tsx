@@ -15,7 +15,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type ReactNode,
   useContext,
-  useMemo,
+  useEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -24,7 +24,9 @@ import { createPortal } from "react-dom";
 import CreativeFlowReminder from "@/components/creative/CreativeFlowReminder";
 import { PlatformIcon } from "@/components/creative/platformIcons";
 import { SplitContext } from "@/components/mind-map/canvas/ResizableSplit";
-import { getScripts, platformLabel } from "@/utils/creative";
+import { getIdeaByClientId } from "@/lib/db/actions/ideas";
+import type { CreativeScript } from "@/types/creative";
+import { platformLabel } from "@/utils/creative";
 import {
   getSummaryStatus,
   subscribeSummaryStatus,
@@ -202,10 +204,22 @@ export default function CreativeHelperSidebar({
   // stages keeps the user in their current script instead of the default map.
   const scriptId = params.get("script");
   const scriptQuery = scriptId ? `?script=${encodeURIComponent(scriptId)}` : "";
-  const script = useMemo(
-    () => (scriptId ? (getScripts().find((s) => s.id === scriptId) ?? null) : null),
-    [scriptId],
-  );
+  // Idea metadata (title/platform/goal) is fetched from the DB, not read at
+  // render time — load it in an effect once the active `?script=` id is known.
+  const [script, setScript] = useState<CreativeScript | null>(null);
+  useEffect(() => {
+    if (!scriptId) {
+      setScript(null);
+      return;
+    }
+    let active = true;
+    getIdeaByClientId(scriptId).then((s) => {
+      if (active) setScript(s);
+    });
+    return () => {
+      active = false;
+    };
+  }, [scriptId]);
   const scriptTitle = script?.title ?? null;
 
   const [guideOpen, setGuideOpen] = useState(false);

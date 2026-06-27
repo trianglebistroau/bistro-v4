@@ -36,6 +36,13 @@
       "when": 1781682474558,
       "tag": "0004_odd_wallop",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782484210404,
+      "tag": "0005_military_jackpot",
+      "breakpoints": true
     }
   ]
 }

@@ -5,7 +5,7 @@ import { CalendarDays, Home, Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getScripts } from "@/utils/creative";
+import { listIdeas } from "@/lib/db/actions/ideas";
 
 const TOP_NAV = [
   { Icon: Home, label: "Home", href: "/creative" },
@@ -16,9 +16,9 @@ const TOP_NAV = [
 // { Icon: Bell, label: "Notifications" },
 // { Icon: NotebookPen, label: "Notes" },
 
-// Most recent script's mind map, or the idea grid when none exist yet.
-function recentMindMapHref(): string {
-  const scripts = getScripts();
+// Most recent idea's mind map, or the idea grid when none exist yet.
+async function recentMindMapHref(): Promise<string> {
+  const scripts = await listIdeas();
   if (scripts.length === 0) return "/creative";
   const latest = scripts.reduce((a, b) => (a.createdAt >= b.createdAt ? a : b));
   return `/mind-map?script=${encodeURIComponent(latest.id)}`;
@@ -27,11 +27,17 @@ function recentMindMapHref(): string {
 export default function Sidebar() {
   const pathname = usePathname();
 
-  // Computed after mount — scripts live in localStorage (client-only). Defaults
+  // Computed after mount — ideas come from the DB via a server action. Defaults
   // to /creative so the first render (and the empty state) has a valid target.
   const [ideasHref, setIdeasHref] = useState("/creative");
   useEffect(() => {
-    setIdeasHref(recentMindMapHref());
+    let active = true;
+    recentMindMapHref().then((href) => {
+      if (active) setIdeasHref(href);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const cls = (active: boolean) =>

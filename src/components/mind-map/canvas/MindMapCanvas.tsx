@@ -191,13 +191,12 @@ function CanvasInner() {
   }, [mapId, nodes, edges, getViewport]);
 
   // ── Finalise — export graph, submit to backend, go to summarise ────────────
-  const handleFinalise = useCallback(() => {
+  const handleFinalise = useCallback(async () => {
     const scriptId = mapId !== "default" ? mapId : undefined;
-    submitMindMap(exportMindMapGraph(nodes, edges, scriptId));
-    console.log("Submitted graph:", exportMindMapGraph(nodes, edges));
+    submitMindMap(await exportMindMapGraph(nodes, edges, scriptId));
     // Keep the active idea in the URL so the summarise/plan stages stay in this
     // script's context rather than the default map.
-    
+
     const query =
       mapId !== "default" ? `?script=${encodeURIComponent(mapId)}` : "";
     router.push(`/summarise${query}`);

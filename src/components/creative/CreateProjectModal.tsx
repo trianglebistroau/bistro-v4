@@ -3,9 +3,9 @@
 import { ChevronDown, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { createIdea } from "@/lib/db/actions/ideas";
 import type { Platform } from "@/types/creative";
 import {
-  addScript,
   clearDraft,
   EMPTY_DRAFT,
   getDraft,
@@ -79,9 +79,9 @@ export default function CreateProjectModal() {
     setPlatformOpen(false);
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!canSubmit) return;
-    const script = addScript(folder, draft);
+    const script = await createIdea(draft);
     clearDraft(folder);
     router.push(`/mind-map?script=${encodeURIComponent(script.id)}`);
   }

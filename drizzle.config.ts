@@ -1,5 +1,9 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
 import { defineConfig } from 'drizzle-kit';
+
+// App env lives in .env.local (Next.js convention); load it for drizzle-kit too.
+config({ path: '.env.local' });
+config();
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not set in the .env file');
