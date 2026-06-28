@@ -299,7 +299,7 @@ function CanvasInner() {
     const scriptId = mapId !== "default" ? mapId : undefined;
     try {
       const graph = await exportMindMapGraph(nodes, edges, scriptId);
-      submitMindMap(graph);
+      submitMindMap(graph, mapId).catch(console.error);
     } catch (err) {
       console.error("Failed to export mind map:", err);
       return;

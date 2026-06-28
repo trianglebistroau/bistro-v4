@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -28,16 +29,15 @@ import { getIdeaByClientId } from "@/lib/db/actions/ideas";
 import { platformLabel } from "@/utils/creative";
 import {
   getSummaryStatus,
+  initSummaryStatus,
   subscribeSummaryStatus,
 } from "@/utils/summarise-service";
 
-// Reactive summary status — drives which downstream stages are unlocked.
-function useSummaryStatus() {
-  return useSyncExternalStore(
-    subscribeSummaryStatus,
-    getSummaryStatus,
-    () => null,
-  );
+// Reactive summary status — per-clientId, backed by in-memory cache.
+// Cache is warmed by initSummaryStatus (called in the sidebar on scriptId change).
+function useSummaryStatus(clientId: string) {
+  const getSnapshot = useCallback(() => getSummaryStatus(clientId), [clientId]);
+  return useSyncExternalStore(subscribeSummaryStatus, getSnapshot, () => null);
 }
 
 // The three creative stages. Each is its own route; in tab mode (onSelect set)
@@ -192,21 +192,22 @@ export default function CreativeHelperSidebar({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const summaryStatus = useSummaryStatus();
+  const scriptId = params.get("script");
+  const summaryStatus = useSummaryStatus(scriptId ?? "default");
   const split = useContext(SplitContext);
   const [collapsed, setCollapsed] = useState(false);
 
   // Collapse handler: embedded → the canvas split; standalone → own rail.
   const collapse = embedded ? split?.collapse : () => setCollapsed(true);
 
-  // Carry the active idea (?script=<id>) across step navigation so switching
-  // stages keeps the user in their current script instead of the default map.
-  const scriptId = params.get("script");
+  // Warm the status cache when the active script changes.
   const scriptQuery = scriptId ? `?script=${encodeURIComponent(scriptId)}` : "";
   const [script, setScript] = useState<
     import("@/types/creative").CreativeScript | null
   >(null);
   useEffect(() => {
+    const id = scriptId ?? "default";
+    initSummaryStatus(id).catch(console.error);
     if (!scriptId) {
       setScript(null);
       return;
