@@ -1,31 +1,30 @@
 // Video → mind-map analysis service.
 //
-// Calls POST /api/v1/video-mindmap: scrapes a TikTok video and returns topic
-// suggestions grouped by the four mind-map hubs. Uses the same timeout + retry
+// Calls POST /api/v1/video-mindmap: scrapes a TikTok video and returns one
+// mind-map node per requested analysis type. Uses the same timeout + retry
 // ("rebounce") shape as summarise-service so a slow/cold backend call can be
 // retried instead of failing outright.
 //
-// Successful results are cached in local storage keyed by (url + prompt). The
-// backend call is expensive (scrape + LLM) so re-analysing the same input
-// reuses the cached result instead of hitting the network again.
+// Successful results are cached in local storage keyed by
+// (url + sorted types + start offset + end offset). Re-analysing the same
+// inputs reuses the cached result instead of hitting the network again.
 
 import { storage } from "@/utils/storage";
 
+export interface VideoMindmapNode {
+  type: string;
+  content: string;
+}
+
 export interface VideoMindmapResult {
   nodeId: string;
-  bigPicture: string[];
-  toneAndMood: string[];
-  targetAudience: string[];
-  composition: string[];
+  nodes: VideoMindmapNode[];
 }
 
 // Shape returned by `POST /api/v1/video-mindmap`.
 interface VideoMindmapApiResponse {
   node_id: string;
-  big_picture: string[];
-  tone_and_mood: string[];
-  target_audience: string[];
-  composition: string[];
+  nodes: VideoMindmapNode[];
 }
 
 // Same-origin Next.js route handler that proxies to the backend server-side.
@@ -46,15 +45,22 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type CachedResult = Omit<VideoMindmapResult, "nodeId">;
 const CACHE_PREFIX = "bistro_videomindmap_";
 
-// djb2 — keep the storage key short and stable regardless of url/prompt length.
+// djb2 — keep the storage key short and stable regardless of input length.
 function hash(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 }
 
-function cacheKey(url: string, prompt: string): string {
-  return `${CACHE_PREFIX}${hash(`${url.trim()}\n${prompt.trim()}`)}`;
+function cacheKey(
+  url: string,
+  types: string[],
+  startOffset: number,
+  endOffset: number,
+): string {
+  // Sort types so order differences in the UI don't produce cache misses.
+  const typesKey = [...types].sort().join(",");
+  return `${CACHE_PREFIX}${hash(`${url.trim()}\n${typesKey}\n${startOffset}\n${endOffset}`)}`;
 }
 
 // 4xx (except 408/429) are caller errors — retrying won't help.
@@ -65,17 +71,16 @@ function isRetryable(status: number): boolean {
 function mapResponse(res: VideoMindmapApiResponse): VideoMindmapResult {
   return {
     nodeId: res.node_id,
-    bigPicture: res.big_picture ?? [],
-    toneAndMood: res.tone_and_mood ?? [],
-    targetAudience: res.target_audience ?? [],
-    composition: res.composition ?? [],
+    nodes: res.nodes ?? [],
   };
 }
 
 async function attempt(
   nodeId: string,
   tiktokUrl: string,
-  userPrompt: string,
+  types: string[],
+  startOffset: number,
+  endOffset: number,
 ): Promise<VideoMindmapResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -87,7 +92,9 @@ async function attempt(
       body: JSON.stringify({
         node_id: nodeId,
         tiktok_url: tiktokUrl,
-        user_prompt: userPrompt,
+        types,
+        start_offset: startOffset,
+        end_offset: endOffset,
       }),
       signal: controller.signal,
     });
@@ -115,22 +122,8 @@ async function attempt(
   }
 }
 
-// Returns a previously cached analysis for this url+prompt, or null. Lets the
-// caller know up-front whether an analyse would be free (no backend call).
-export function getCachedVideoMindmap(
-  nodeId: string,
-  tiktokUrl: string,
-  userPrompt: string,
-): VideoMindmapResult | null {
-  const cached = storage.read<CachedResult | null>(
-    cacheKey(tiktokUrl, userPrompt),
-    null,
-  );
-  return cached ? { nodeId, ...cached } : null;
-}
-
-// Analyse a TikTok video into mind-map topic suggestions.
-//   • Returns the cached result for this url+prompt when present (no network),
+// Analyse a TikTok video into mind-map nodes, one per requested type.
+//   • Returns the cached result for this url+types+offsets when present (no network),
 //     unless `force` is set.
 //   • Otherwise calls the backend, retrying once on transient failures.
 //   • Caches successful results so the same input never re-hits the backend.
@@ -138,10 +131,12 @@ export function getCachedVideoMindmap(
 export async function analyzeVideoMindmap(
   nodeId: string,
   tiktokUrl: string,
-  userPrompt: string,
+  types: string[],
+  startOffset: number,
+  endOffset: number,
   options: { force?: boolean } = {},
 ): Promise<VideoMindmapResult> {
-  const key = cacheKey(tiktokUrl, userPrompt);
+  const key = cacheKey(tiktokUrl, types, startOffset, endOffset);
 
   if (!options.force) {
     const cached = storage.read<CachedResult | null>(key, null);
@@ -151,7 +146,13 @@ export async function analyzeVideoMindmap(
   let lastErr: unknown;
   for (let n = 1; n <= MAX_ATTEMPTS; n++) {
     try {
-      const result = await attempt(nodeId, tiktokUrl, userPrompt);
+      const result = await attempt(
+        nodeId,
+        tiktokUrl,
+        types,
+        startOffset,
+        endOffset,
+      );
       const { nodeId: _omit, ...payload } = result;
       storage.write<CachedResult>(key, payload);
       return result;

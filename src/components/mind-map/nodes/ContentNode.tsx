@@ -4,7 +4,6 @@ import {
   Handle,
   type Node,
   type NodeProps,
-  NodeResizer,
   NodeToolbar,
   Position,
   useReactFlow,
@@ -27,6 +26,13 @@ export type ContentNodeData = {
   /** User-editable body text. */
   body: string;
   fontSize: number;
+  /** User-set card width (persisted). Falls back to DEFAULT_W. */
+  width?: number;
+  /**
+   * Minimum card height floor (persisted). The card grows taller when text
+   * overflows, but never shrinks below this value.
+   */
+  minHeight?: number;
 };
 
 export type ContentNodeType = Node<ContentNodeData, "content">;
@@ -56,6 +62,12 @@ const FONT_SIZES = [
   { label: "L", value: 18 },
 ] as const;
 
+// Default / minimum dimensions (flow units).
+const DEFAULT_W = 200;
+const DEFAULT_MIN_H = 64;
+const MIN_W = 140;
+const MIN_H = 56;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ContentNode({
@@ -63,14 +75,15 @@ export default function ContentNode({
   data,
   selected,
 }: NodeProps<ContentNodeType>) {
-  const { updateNodeData, deleteElements } = useReactFlow();
+  const { updateNodeData, deleteElements, getViewport } = useReactFlow();
   const theme = CATEGORY_THEME[data.category];
 
   const bodyRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const isEditingRef = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Sync external data.body → DOM only when not editing
+  // Sync external data.body → DOM when not editing (avoids overwriting mid-edit).
   useEffect(() => {
     if (!isEditingRef.current && bodyRef.current) {
       bodyRef.current.innerText = data.body ?? "";
@@ -98,30 +111,59 @@ export default function ContentNode({
     updateNodeData(id, { body: bodyRef.current?.innerText ?? "" });
   }, [id, updateNodeData]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") bodyRef.current?.blur();
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Escape") bodyRef.current?.blur();
+    e.stopPropagation();
+  }, []);
+
+  // ── Custom bottom-right resize handle ────────────────────────────────────────
+  //
+  // NodeResizer/NodeResizeControl write a fixed node height, which prevents
+  // auto-grow. Instead we track pointer delta ourselves and store the result as
+  // data.width (fixed) + data.minHeight (floor). The card's actual height stays
+  // content-driven so text always pushes it taller than the floor.
+  const handleResizePointerDown = useCallback(
+    (e: React.PointerEvent) => {
       e.stopPropagation();
+      e.preventDefault();
+      const card = cardRef.current;
+      if (!card) return;
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startW = card.offsetWidth;
+      const startH = card.offsetHeight;
+      // Screen pixels ÷ zoom → flow units.
+      const zoom = getViewport().zoom;
+
+      const onMove = (me: PointerEvent) => {
+        const newW = Math.round(
+          Math.max(MIN_W, startW + (me.clientX - startX) / zoom),
+        );
+        const newH = Math.round(
+          Math.max(MIN_H, startH + (me.clientY - startY) / zoom),
+        );
+        updateNodeData(id, { width: newW, minHeight: newH });
+      };
+
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
     },
-    [],
+    [id, updateNodeData, getViewport],
   );
 
-  return (
-    <div className="group relative w-[200px]">
-      <NodeResizer
-        isVisible={!!selected}
-        minWidth={120}
-        minHeight={60}
-        lineStyle={{ border: "1.5px solid #94a3b8" }}
-        handleStyle={{
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: "#fff",
-          border: "1.5px solid #94a3b8",
-        }}
-      />
+  const cardWidth = data.width ?? DEFAULT_W;
+  const cardMinH = data.minHeight ?? DEFAULT_MIN_H;
 
+  return (
+    // Outer wrapper has NO width/height — the node auto-measures to the card so
+    // React Flow's collision box always matches what the user sees.
+    <div className="group relative">
       {/* Floating toolbar — font size + delete */}
       <NodeToolbar isVisible={!!selected} position={Position.Top} offset={8}>
         <div className="bg-white border border-gray-200 rounded-xl shadow-md px-2 py-1.5 flex items-center gap-1 text-xs select-none">
@@ -171,20 +213,34 @@ export default function ContentNode({
         />
       ))}
 
+      {/*
+        Card — width is fixed (resizable); minHeight is the floor.
+        flex-col lets the body fill space up to minHeight, then grow taller.
+        No overflow-auto / fixed height → text always visible, card grows.
+      */}
       <div
-        className="rounded-xl overflow-hidden shadow-sm"
-        style={{ border: `1.5px solid ${theme.headerBg}` }}
+        ref={cardRef}
+        className="flex flex-col rounded-xl overflow-hidden shadow-sm"
+        style={{
+          width: cardWidth,
+          minHeight: cardMinH,
+          border: `1.5px solid ${theme.headerBg}`,
+        }}
       >
         {/* Fixed header */}
         <div
-          className="px-3 py-1.5 text-xs font-bold"
+          className="shrink-0 px-3 py-1.5 text-xs font-bold"
           style={{ background: theme.headerBg, color: theme.headerText }}
         >
           {data.header}
         </div>
 
-        {/* Editable body */}
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: double-click to edit body */}
+        {/*
+          Editable body.
+          flex-1 fills to minHeight; no overflow-auto so it grows the card instead
+          of scrolling. break-words + whitespace-pre-wrap handles long text.
+        */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: double-click to edit */}
         <div
           ref={bodyRef}
           contentEditable={isEditing}
@@ -197,13 +253,40 @@ export default function ContentNode({
           onKeyDown={isEditing ? handleKeyDown : undefined}
           style={{ fontSize: data.fontSize ?? 14, color: theme.bodyText }}
           className={[
-            "px-3 py-2 leading-snug bg-white min-h-[40px] wrap-break-word whitespace-pre-wrap",
+            "flex-1 px-3 py-2 leading-snug bg-white min-h-[40px] break-words whitespace-pre-wrap",
             "focus:outline-none",
             isEditing ? "nodrag nopan cursor-text" : "cursor-default",
             !data.body && !isEditing ? "opacity-30" : "",
           ].join(" ")}
         />
       </div>
+
+      {/* Bottom-right drag handle — only visible when node is selected */}
+      {selected && (
+        // nodrag nopan tells React Flow not to treat this as a node drag.
+        <div
+          className="nodrag nopan absolute bottom-0 right-0 cursor-se-resize"
+          style={{ transform: "translate(35%, 35%)" }}
+          onPointerDown={handleResizePointerDown}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle
+              cx="7"
+              cy="7"
+              r="5.5"
+              fill="white"
+              stroke="#94a3b8"
+              strokeWidth="1.5"
+            />
+          </svg>
+        </div>
+      )}
     </div>
   );
 }

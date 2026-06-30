@@ -14,11 +14,11 @@ import {
 } from "@/components/mind-map/utils/spawnTopic";
 
 export default function MindMapSidePanel() {
-  const { addNodes } = useReactFlow();
+  const { addNodes, getNodes } = useReactFlow();
 
   function spawnTopic(group: MindMapGroup, label: string) {
     if (!group.category) return;
-    spawnContentNode({ addNodes }, group.category, label);
+    spawnContentNode({ addNodes, getNodes }, group.category, label);
   }
 
   function handleDragStart(

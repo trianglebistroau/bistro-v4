@@ -8,16 +8,24 @@ import {
   Position,
   useReactFlow,
 } from "@xyflow/react";
-import { BarChart2, Clapperboard, ClipboardEdit, Headphones, Image, Plus } from "lucide-react";
+import {
+  BarChart2,
+  Clapperboard,
+  ClipboardEdit,
+  Headphones,
+  Image,
+  Plus,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  CATEGORY_THEME,
   type ContentCategory,
   categoryOptions,
-  CATEGORY_THEME,
 } from "@/components/mind-map/constants/topics";
 import { EDGE_MARKER } from "@/components/mind-map/edges/edgeTypes";
 import type { ContentNodeData } from "@/components/mind-map/nodes/ContentNode";
 import { pickHandles } from "@/utils/mind-map-handles";
+import { placeNode, rectOf } from "@/utils/mind-map-layout";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,11 +76,16 @@ type MenuCategoryItem = {
 type ToolbarItem = DirectItem | MenuCategoryItem;
 
 const TOOLBAR_ITEMS: ToolbarItem[] = [
-  { id: "scene",         icon: Clapperboard, label: "Add Scene",           type: "direct" },
-  { id: "visual",        icon: Image,        label: "Add Visual",          type: "menu" },
-  { id: "audio",         icon: Headphones,   label: "Add Audio",           type: "menu" },
-  { id: "script",        icon: ClipboardEdit,label: "Add Script",          type: "menu" },
-  { id: "videoAnalysis", icon: BarChart2,    label: "Video Analysis",      type: "direct" },
+  { id: "scene", icon: Clapperboard, label: "Add Scene", type: "direct" },
+  { id: "visual", icon: Image, label: "Add Visual", type: "menu" },
+  { id: "audio", icon: Headphones, label: "Add Audio", type: "menu" },
+  { id: "script", icon: ClipboardEdit, label: "Add Script", type: "menu" },
+  {
+    id: "videoAnalysis",
+    icon: BarChart2,
+    label: "Video Analysis",
+    type: "direct",
+  },
 ];
 
 // ─── SceneNode ────────────────────────────────────────────────────────────────
@@ -133,26 +146,34 @@ export default function SceneNode({
     const self = getNode(id);
     if (!self) return;
     const newId = `content-${Date.now()}`;
-    const nodeWidth = self.measured?.width ?? 200;
-    const connectedCount = getEdges().filter(
-      (e) => e.source === id && e.id.startsWith("ce-"),
-    ).length;
 
-    const pos = {
-      x: self.position.x + nodeWidth + 60,
-      y: self.position.y + connectedCount * 80,
-    };
+    // Estimated card size (before RF measures it).
+    const CARD_W = 200;
+    const CARD_H = 96;
+
+    const selfW = self.measured?.width ?? 200;
+    const selfH = self.measured?.height ?? 52;
+    const anchorX = self.position.x + selfW + 48;
+    const anchorY = self.position.y + selfH / 2 - CARD_H / 2;
+
+    const occupied = getNodes().map(rectOf);
+    const pos = placeNode(occupied, anchorX, anchorY, 1, CARD_W, CARD_H);
 
     const nodeData: ContentNodeData = {
       category,
       header,
       body: "",
       fontSize: 14,
+      width: CARD_W,
     };
 
     addNodes({ id: newId, type: "content", position: pos, data: nodeData });
 
-    const handles = pickHandles(self, { position: pos, width: 200, height: 70 });
+    const handles = pickHandles(self, {
+      position: pos,
+      width: CARD_W,
+      height: CARD_H,
+    });
     addEdges({
       id: `ce-${id}-${newId}`,
       source: id,
@@ -171,14 +192,30 @@ export default function SceneNode({
     const self = getNode(id);
     if (!self) return;
     const newId = `videoDrop-${Date.now()}`;
-    const nodeWidth = self.measured?.width ?? 200;
-    const connectedCount = getEdges().filter((e) => e.source === id).length;
-    const pos = {
-      x: self.position.x + nodeWidth + 60,
-      y: self.position.y + connectedCount * 80,
-    };
-    addNodes({ id: newId, type: "videoDrop", position: pos, data: { status: "idle" } });
-    const handles = pickHandles(self, { position: pos, width: 280, height: 200 });
+
+    // VideoNode root is w-70 (280px) and roughly 380px tall once rendered.
+    const VIDEO_W = 280;
+    const VIDEO_H = 380;
+
+    const selfW = self.measured?.width ?? 200;
+    const selfH = self.measured?.height ?? 52;
+    const anchorX = self.position.x + selfW + 48;
+    const anchorY = self.position.y + selfH / 2 - VIDEO_H / 2;
+
+    const occupied = getNodes().map(rectOf);
+    const pos = placeNode(occupied, anchorX, anchorY, 1, VIDEO_W, VIDEO_H);
+
+    addNodes({
+      id: newId,
+      type: "videoDrop",
+      position: pos,
+      data: { status: "idle" },
+    });
+    const handles = pickHandles(self, {
+      position: pos,
+      width: VIDEO_W,
+      height: VIDEO_H,
+    });
     addEdges({
       id: `ve-${id}-${newId}`,
       source: id,

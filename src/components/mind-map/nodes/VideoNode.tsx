@@ -15,14 +15,16 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCallback, useState } from "react";
+import {
+  CATEGORY_THEME,
+  TYPE_TO_CONTENT,
+  VIDEO_ANALYSIS_TYPES,
+  type VideoAnalysisType,
+} from "@/components/mind-map/constants/topics";
 import { EDGE_MARKER } from "@/components/mind-map/edges/edgeTypes";
 import type { ContentNodeData } from "@/components/mind-map/nodes/ContentNode";
 import { pickHandles } from "@/utils/mind-map-handles";
-import {
-  distributeBesideHub,
-  type Rect,
-  rectOf,
-} from "@/utils/mind-map-layout";
+import { distributeGrid, type Rect, rectOf } from "@/utils/mind-map-layout";
 import {
   analyzeVideoMindmap,
   isTikTokUrl,
@@ -36,7 +38,10 @@ export type VideoStatus = "idle" | "analyzing" | "done" | "error";
 export type VideoDropData = {
   status: VideoStatus;
   tiktokUrl?: string;
-  userPrompt?: string;
+  /** Persisted analysis type selections so they survive canvas save/load. */
+  types?: VideoAnalysisType[];
+  startOffset?: number;
+  endOffset?: number;
   note?: string;
   resultCount?: number;
 };
@@ -46,30 +51,12 @@ export type VideoDropNodeType = Node<VideoDropData, "videoDrop">;
 const HANDLE_CLS =
   "!w-2.5 !h-2.5 !rounded-full !border-2 !border-white !bg-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150";
 
-// ── Video analysis category → content node category mapping ──────────────────
-// bigPicture + targetAudience → script (concept-level)
-// composition → visual (how it's shot)
-// toneAndMood → audio (feel / music choice)
-
-type ResultListKey = keyof Pick<
-  VideoMindmapResult,
-  "bigPicture" | "toneAndMood" | "targetAudience" | "composition"
->;
-
-const VIDEO_TO_CONTENT: Record<
-  ResultListKey,
-  { category: ContentNodeData["category"]; header: string }
-> = {
-  bigPicture:     { category: "script", header: "Big Picture" },
-  targetAudience: { category: "script", header: "Target Audience" },
-  composition:    { category: "visual", header: "Composition" },
-  toneAndMood:    { category: "audio",  header: "Tone & Mood" },
-};
-
-function truncate(text: string, max = 48): string {
-  const t = text.trim();
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
-}
+// Result node dimensions — ~1.5:1 landscape card.
+const CELL_W = 260;
+const CELL_H = 175;
+const GRID_GAP = 28;
+// Gap between the video node edge and the start of the result grid.
+const ANCHOR_GAP = 64;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -78,126 +65,208 @@ export default function VideoNode({
   data,
   selected,
 }: NodeProps<VideoDropNodeType>) {
-  const { updateNodeData, getNode, getNodes, addNodes, addEdges } =
+  const { updateNodeData, getNode, getNodes, getEdges, addNodes, addEdges } =
     useReactFlow();
 
   const status = data.status ?? "idle";
   const [url, setUrl] = useState(data.tiktokUrl ?? "");
-  const [prompt, setPrompt] = useState(data.userPrompt ?? "");
+  const [selectedTypes, setSelectedTypes] = useState<Set<VideoAnalysisType>>(
+    () => new Set(data.types ?? []),
+  );
+  const [start, setStart] = useState(data.startOffset ?? 0);
+  const [end, setEnd] = useState(data.endOffset ?? 30);
 
-  // Spawn analysis results as themed content nodes linked back to this video node.
-  // De-dupes against nodes already spawned from this video block.
+  const toggleType = useCallback(
+    (type: VideoAnalysisType) => {
+      setSelectedTypes((prev) => {
+        const next = new Set(prev);
+        if (next.has(type)) next.delete(type);
+        else next.add(type);
+        updateNodeData(id, { types: [...next] });
+        return next;
+      });
+    },
+    [id, updateNodeData],
+  );
+
+  // ── Spawn analysis results as content nodes ─────────────────────────────────
   const spawnResults = useCallback(
     (result: VideoMindmapResult): number => {
       const self = getNode(id);
       if (!self) return 0;
 
-      const leafW = 220;
-      const leafH = 70;
-      const leafBox = (pos: { x: number; y: number }) => ({
-        position: pos,
-        width: leafW,
-        height: leafH,
-      });
+      const allNodes = getNodes();
+      const allEdges = getEdges();
+      const occupied: Rect[] = allNodes.map(rectOf);
 
-      const occupied: Rect[] = getNodes().map(rectOf);
-
-      // Labels already attached to this block, for dedupe.
+      // ── Dedupe against nodes already spawned from this video block ──────────
       const seen = new Set<string>();
-      for (const n of getNodes()) {
+      for (const n of allNodes) {
         if (n.id.startsWith(`vid-${id}-`)) {
           const d = n.data as ContentNodeData;
           seen.add(`${d.header}::${d.body}`);
         }
       }
 
-      let spawned = 0;
-      for (const [key, mapping] of Object.entries(VIDEO_TO_CONTENT) as [
-        ResultListKey,
-        { category: ContentNodeData["category"]; header: string },
-      ][]) {
-        const items: string[] = (result[key] ?? [])
-          .map((raw: string) => truncate(raw))
-          .filter(
-            (label: string) => label && !seen.has(`${mapping.header}::${label}`),
-          );
-        if (items.length === 0) continue;
+      // ── Collect valid new nodes ─────────────────────────────────────────────
+      type PendingNode = {
+        mapping: { category: ContentNodeData["category"]; header: string };
+        body: string;
+      };
+      const pending: PendingNode[] = [];
+      for (const { type, content } of result.nodes) {
+        const mapping = TYPE_TO_CONTENT[type as VideoAnalysisType];
+        if (!mapping) continue; // defensive: unknown type from BE
+        const body = content.trim();
+        if (!body || seen.has(`${mapping.header}::${body}`)) continue;
+        pending.push({ mapping, body });
+      }
 
-        const positions = distributeBesideHub(self, items.length, occupied, {
-          dir: 1,
-          leafW,
-          leafH,
-        });
+      if (pending.length === 0) return 0;
 
-        items.forEach((body: string, i: number) => {
-          const pos = positions[i];
-          const nodeId = `vid-${id}-${Date.now()}-${spawned}`;
+      // ── Determine placement direction ────────────────────────────────────────
+      const selfW = self.measured?.width ?? 280;
+      const selfH = self.measured?.height ?? 200;
+      const selfCenterX = self.position.x + selfW / 2;
+      const selfCenterY = self.position.y + selfH / 2;
 
-          const nodeData: ContentNodeData = {
-            category: mapping.category,
-            header: mapping.header,
-            body,
-            fontSize: 14,
-          };
-
-          addNodes({
-            id: nodeId,
-            type: "content",
-            position: pos,
-            data: nodeData,
-          });
-
-          const handles = pickHandles(self, leafBox(pos));
-          addEdges({
-            id: `e-vid-${nodeId}`,
-            source: id,
-            target: nodeId,
-            sourceHandle: handles.sourceHandle,
-            targetHandle: handles.targetHandle,
-            type: "labeled",
-            data: { arrowEnd: true },
-            markerEnd: EDGE_MARKER,
-          });
-
-          seen.add(`${mapping.header}::${body}`);
-          spawned += 1;
-        });
-
-        // Grow the occupied map after each batch so next category positions don't overlap
-        for (const p of positions) {
-          occupied.push({ x: p.x, y: p.y, w: leafW, h: leafH });
+      // Find a scene node connected to this video node (by node type, not edge id).
+      let dir: -1 | 1 = 1; // default: place to the right
+      for (const e of allEdges) {
+        if (e.source !== id && e.target !== id) continue;
+        const otherId = e.source === id ? e.target : e.source;
+        const other = allNodes.find((n) => n.id === otherId);
+        if (other?.type === "scene") {
+          // Push results away from the scene.
+          const sceneCenterX =
+            other.position.x + (other.measured?.width ?? 200) / 2;
+          dir = sceneCenterX < selfCenterX ? 1 : -1;
+          break;
         }
       }
+
+      // No scene found → pick the emptier side.
+      if (dir === 1) {
+        const rightCount = occupied.filter(
+          (r) => r.x > self.position.x + selfW,
+        ).length;
+        const leftCount = occupied.filter(
+          (r) => r.x + r.w < self.position.x,
+        ).length;
+        if (leftCount < rightCount) dir = -1;
+      }
+
+      // ── Grid anchor ─────────────────────────────────────────────────────────
+      const cols = 2;
+      const rows = Math.ceil(pending.length / cols);
+      const gridH = rows * CELL_H + (rows - 1) * GRID_GAP;
+
+      const baseX =
+        dir > 0
+          ? self.position.x + selfW + ANCHOR_GAP
+          : self.position.x - ANCHOR_GAP - CELL_W;
+      const baseY = selfCenterY - gridH / 2;
+
+      // ── Layout all positions at once ─────────────────────────────────────────
+      const positions = distributeGrid(baseX, baseY, pending.length, occupied, {
+        cols,
+        cellW: CELL_W,
+        cellH: CELL_H,
+        gap: GRID_GAP,
+        dir,
+      });
+
+      // ── Spawn nodes + edges ──────────────────────────────────────────────────
+      let spawned = 0;
+      const leafBox = (pos: { x: number; y: number }) => ({
+        position: pos,
+        width: CELL_W,
+        height: CELL_H,
+      });
+
+      pending.forEach(({ mapping, body }, i) => {
+        const pos = positions[i];
+        const nodeId = `vid-${id}-${Date.now()}-${spawned}`;
+
+        const nodeData: ContentNodeData = {
+          category: mapping.category,
+          header: mapping.header,
+          body,
+          fontSize: 14,
+          // Store as data so the node auto-measures (no fixed height).
+          // ContentNode uses width as fixed card width and minHeight as the
+          // floor — text can still push the card taller than CELL_H.
+          width: CELL_W,
+          minHeight: CELL_H,
+        };
+
+        addNodes({
+          id: nodeId,
+          type: "content",
+          position: pos,
+          data: nodeData,
+        });
+
+        const handles = pickHandles(self, leafBox(pos));
+        addEdges({
+          id: `e-vid-${nodeId}`,
+          source: id,
+          target: nodeId,
+          sourceHandle: handles.sourceHandle,
+          targetHandle: handles.targetHandle,
+          type: "labeled",
+          data: { arrowEnd: true },
+          markerEnd: EDGE_MARKER,
+        });
+
+        seen.add(`${mapping.header}::${body}`);
+        spawned += 1;
+      });
+
       return spawned;
     },
-    [id, getNode, getNodes, addNodes, addEdges],
+    [id, getNode, getNodes, getEdges, addNodes, addEdges],
   );
 
+  // ── Analyse handler ──────────────────────────────────────────────────────────
   const handleAnalyze = useCallback(async () => {
     const tiktokUrl = url.trim();
-    const userPrompt = prompt.trim();
+    // Clamp offsets: start ≥ 0, end > start (BE rejects end ≤ start).
+    const safeStart = Number.isFinite(start) ? Math.max(0, start) : 0;
+    const safeEnd = Number.isFinite(end) ? Math.max(safeStart + 1, end) : 30;
+
     if (!isTikTokUrl(tiktokUrl)) {
       updateNodeData(id, {
         status: "error",
         note: "Enter a valid TikTok video link.",
         tiktokUrl,
-        userPrompt,
       });
       return;
     }
-    if (!userPrompt) {
+    if (selectedTypes.size === 0) {
       updateNodeData(id, {
         status: "error",
-        note: "Add a prompt describing what to extract.",
+        note: "Pick at least one thing to analyse.",
         tiktokUrl,
-        userPrompt,
       });
       return;
     }
 
-    updateNodeData(id, { status: "analyzing", tiktokUrl, userPrompt });
+    updateNodeData(id, {
+      status: "analyzing",
+      tiktokUrl,
+      types: [...selectedTypes],
+      startOffset: safeStart,
+      endOffset: safeEnd,
+    });
     try {
-      const result = await analyzeVideoMindmap(id, tiktokUrl, userPrompt);
+      const result = await analyzeVideoMindmap(
+        id,
+        tiktokUrl,
+        [...selectedTypes],
+        safeStart,
+        safeEnd,
+      );
       const count = spawnResults(result);
       updateNodeData(id, {
         status: "done",
@@ -213,7 +282,7 @@ export default function VideoNode({
         note: err instanceof Error ? err.message : "Analysis failed.",
       });
     }
-  }, [id, url, prompt, updateNodeData, spawnResults]);
+  }, [id, url, selectedTypes, start, end, updateNodeData, spawnResults]);
 
   const analyzing = status === "analyzing";
 
@@ -240,7 +309,7 @@ export default function VideoNode({
         ),
       )}
 
-      {/* Teal sidebar palette */}
+      {/* Teal card */}
       <div
         className={[
           "rounded-2xl p-4 shadow-sm transition-shadow",
@@ -248,6 +317,7 @@ export default function VideoNode({
         ].join(" ")}
         style={{ backgroundColor: "#e4f2eb" }}
       >
+        {/* Header */}
         <div
           className="flex items-center gap-1.5 mb-3"
           style={{ color: "#0f766e" }}
@@ -256,7 +326,8 @@ export default function VideoNode({
           <span className="text-sm font-bold">Analyse a video</span>
         </div>
 
-        <div className="nodrag nopan flex flex-col gap-2.5">
+        <div className="nodrag nopan flex flex-col gap-3">
+          {/* TikTok URL */}
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -266,16 +337,87 @@ export default function VideoNode({
             className="w-full rounded-xl border border-[#4caf87]/40 bg-white px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#0f766e] disabled:opacity-60"
           />
 
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onBlur={() => updateNodeData(id, { userPrompt: prompt })}
-            disabled={analyzing}
-            rows={4}
-            placeholder="What should we pull from this video? e.g. hook ideas, tone, shot list…"
-            className="w-full resize-none rounded-xl border border-[#4caf87]/40 bg-white px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#0f766e] disabled:opacity-60"
-          />
+          {/* Type picker — pill chips grouped by category */}
+          <div className="flex flex-col gap-2.5">
+            {VIDEO_ANALYSIS_TYPES.map((group) => {
+              const theme = CATEGORY_THEME[group.category];
+              return (
+                <div key={group.category}>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-wide mb-1.5"
+                    style={{ color: theme.headerText }}
+                  >
+                    {group.label}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.types.map((t) => {
+                      const active = selectedTypes.has(t.value);
+                      return (
+                        <button
+                          key={t.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => toggleType(t.value)}
+                          disabled={analyzing}
+                          className="rounded-full px-2.5 py-1 text-xs font-medium border transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: theme.headerText,
+                                  color: "#fff",
+                                  borderColor: theme.headerText,
+                                }
+                              : {
+                                  backgroundColor: "#fff",
+                                  color: theme.bodyText,
+                                  borderColor: `${theme.headerText}55`,
+                                }
+                          }
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
+          {/* Time window */}
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400 shrink-0">
+              Window
+            </span>
+            <label className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="text-[10px]">Start</span>
+              <input
+                type="number"
+                min={0}
+                value={start}
+                onChange={(e) => setStart(Number(e.target.value))}
+                onBlur={() => updateNodeData(id, { startOffset: start })}
+                disabled={analyzing}
+                className="w-15 rounded-lg border border-[#4caf87]/40 bg-white px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#0f766e] disabled:opacity-60"
+              />
+              <span className="text-[10px] text-gray-400">s</span>
+            </label>
+            <label className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="text-[10px]">End</span>
+              <input
+                type="number"
+                min={0}
+                value={end}
+                onChange={(e) => setEnd(Number(e.target.value))}
+                onBlur={() => updateNodeData(id, { endOffset: end })}
+                disabled={analyzing}
+                className="w-15 rounded-lg border border-[#4caf87]/40 bg-white px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#0f766e] disabled:opacity-60"
+              />
+              <span className="text-[10px] text-gray-400">s</span>
+            </label>
+          </div>
+
+          {/* Analyse button */}
           <button
             type="button"
             onClick={handleAnalyze}

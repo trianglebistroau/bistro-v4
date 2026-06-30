@@ -28,6 +28,7 @@ import {
 } from "@/components/mind-map/utils/spawnTopic";
 import { loadCanvas, saveCanvas } from "@/lib/db/actions/mindmap";
 import { pickHandles } from "@/utils/mind-map-handles";
+import { placeNode, rectOf } from "@/utils/mind-map-layout";
 import { exportMindMapGraph } from "@/utils/mindmap-export";
 import { submitMindMap } from "@/utils/summarise-service";
 import "@xyflow/react/dist/style.css";
@@ -325,18 +326,20 @@ function CanvasInner() {
       e.preventDefault();
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
-      // Video node drop
+      // Video node drop — nudge to nearest free slot if cursor lands on a node.
       if (e.dataTransfer.types.includes(VIDEO_DND_MIME)) {
+        const occupied = getNodes().map(rectOf);
+        const pos = placeNode(occupied, position.x, position.y, 1, 280, 380);
         addNodes({
           id: `videoDrop-${Date.now()}`,
           type: "videoDrop",
-          position,
+          position: pos,
           data: { status: "idle" },
         });
         return;
       }
 
-      // Content chip drop
+      // Content chip drop — spawnContentNode handles collision + nudge.
       const raw = e.dataTransfer.getData(TOPIC_DND_MIME);
       if (!raw) return;
       let payload: TopicDragPayload;
@@ -346,13 +349,13 @@ function CanvasInner() {
         return;
       }
       spawnContentNode(
-        { addNodes },
+        { addNodes, getNodes },
         payload.category,
         payload.header,
         position,
       );
     },
-    [screenToFlowPosition, addNodes],
+    [screenToFlowPosition, addNodes, getNodes],
   );
 
   // ── Pane click — place video node ─────────────────────────────────────────
