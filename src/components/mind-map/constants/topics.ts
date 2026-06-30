@@ -115,6 +115,71 @@ export function categoryOptions(category: ContentCategory): string[] {
   return group?.sections.flatMap((s) => s.items) ?? [];
 }
 
+// ── Video analysis types ──────────────────────────────────────────────────────
+// Mirrors the backend CATEGORY_TYPES / VALID_TYPES from genai_modules.py.
+// Single source of truth: used for the checkbox UI and for mapping BE response
+// types → ContentNodeData (category + header).
+
+export type VideoAnalysisType =
+  | "scene_description"
+  | "shooting_style"
+  | "voiceover"
+  | "music"
+  | "sound_effect"
+  | "concept_writing"
+  | "timing";
+
+export const VIDEO_ANALYSIS_TYPES: ReadonlyArray<{
+  category: ContentCategory;
+  /** Section heading shown in the VideoNode type picker. */
+  label: string;
+  types: ReadonlyArray<{ value: VideoAnalysisType; label: string }>;
+}> = [
+  {
+    category: "visual",
+    label: "Visual",
+    types: [
+      { value: "scene_description", label: "Scene Description" },
+      { value: "shooting_style",    label: "Shooting Style" },
+    ],
+  },
+  {
+    category: "audio",
+    label: "Audio",
+    types: [
+      { value: "voiceover",    label: "Voiceover" },
+      { value: "music",        label: "Music" },
+      { value: "sound_effect", label: "Sound Effect" },
+    ],
+  },
+  {
+    category: "script",
+    label: "Script",
+    types: [
+      { value: "concept_writing", label: "Concept Writing" },
+      { value: "timing",          label: "Timing" },
+    ],
+  },
+] as const;
+
+/**
+ * Flat lookup from a BE type string → the content node's `category` + `header`.
+ * Used in `VideoNode.spawnResults` to convert `{ type, content }` response
+ * items into `ContentNodeData` without coupling to the BE string values at the
+ * component layer.
+ */
+export const TYPE_TO_CONTENT: Record<
+  VideoAnalysisType,
+  { category: ContentCategory; header: string }
+> = Object.fromEntries(
+  VIDEO_ANALYSIS_TYPES.flatMap((group) =>
+    group.types.map((t) => [
+      t.value,
+      { category: group.category, header: t.label },
+    ]),
+  ),
+) as Record<VideoAnalysisType, { category: ContentCategory; header: string }>;
+
 // ── Anchor (locked) nodes ───────────────────────────────────────────────────
 // Only the central idea (Scene 1) is locked — it can't be deleted or erased.
 export const ANCHOR_NODE_IDS: ReadonlySet<string> = new Set([IDEA_ID]);
